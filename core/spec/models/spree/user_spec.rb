@@ -1,14 +1,14 @@
 require 'spec_helper'
 
-describe Spree::LegacyUser, :type => :model do
+describe Spree::LegacyUser, type: :model do
   # Regression test for #2844 + #3346
   context "#last_incomplete_order" do
     let!(:user) { create(:user) }
     let!(:order) { create(:order, bill_address: create(:address), ship_address: create(:address)) }
 
-    let!(:order_1) { create(:order, :created_at => 1.day.ago, :user => user, :created_by => user) }
-    let!(:order_2) { create(:order, :user => user, :created_by => user) }
-    let!(:order_3) { create(:order, :user => user, :created_by => create(:user)) }
+    let!(:order_1) { create(:order, created_at: 1.day.ago, user: user, created_by: user) }
+    let!(:order_2) { create(:order, user: user, created_by: user) }
+    let!(:order_3) { create(:order, user: user, created_by: create(:user)) }
 
     it "returns correct order" do
       expect(user.last_incomplete_spree_order).to eq order_3
@@ -16,9 +16,9 @@ describe Spree::LegacyUser, :type => :model do
 
     context "persists order address" do
       it "copies over order addresses" do
-        expect {
+        expect do
           user.persist_order_address(order)
-        }.to change { Spree::Address.count }.by(2)
+        end.to change { Spree::Address.count }.by(2)
 
         expect(user.bill_address).to eq order.bill_address
         expect(user.ship_address).to eq order.ship_address
@@ -29,9 +29,9 @@ describe Spree::LegacyUser, :type => :model do
         user.update_column(:ship_address_id, create(:address))
         user.reload
 
-        expect {
+        expect do
           user.persist_order_address(order)
-        }.not_to change { Spree::Address.count }
+        end.not_to change { Spree::Address.count }
       end
 
       it "set both bill and ship address id on subject" do
@@ -60,7 +60,7 @@ describe Spree::LegacyUser, :type => :model do
   end
 end
 
-describe Spree.user_class, :type => :model do
+describe Spree.user_class, type: :model do
   context "reporting" do
     let(:order_value) { BigDecimal.new("80.94") }
     let(:order_count) { 4 }
@@ -138,10 +138,10 @@ describe Spree.user_class, :type => :model do
     end
 
     context "user has several associated store credits" do
-      let(:user)                     { create(:user) }
-      let(:amount)                   { 120.25 }
-      let(:additional_amount)        { 55.75 }
-      let(:store_credit)             { create(:store_credit, user: user, amount: amount, amount_used: 0.0) }
+      let(:user) { create(:user) }
+      let(:amount) { 120.25 }
+      let(:additional_amount) { 55.75 }
+      let(:store_credit) { create(:store_credit, user: user, amount: amount, amount_used: 0.0) }
       let!(:additional_store_credit) { create(:store_credit, user: user, amount: additional_amount, amount_used: 0.0) }
 
       subject { store_credit.user }
@@ -157,7 +157,8 @@ describe Spree.user_class, :type => :model do
           before { additional_store_credit.update_attributes(amount_authorized: authorized_amount) }
 
           it "returns sum of amounts minus used amount and authorized amount" do
-            expect(subject.total_available_store_credit.to_f).to eq (amount + additional_amount - amount_used - authorized_amount)
+            available_store_credit = amount + additional_amount - amount_used - authorized_amount
+            expect(subject.total_available_store_credit.to_f).to eq available_store_credit
           end
         end
 
