@@ -9,7 +9,7 @@ module Spree
     has_many :stock_movements, inverse_of: :stock_item
 
     validates :stock_location, :variant, presence: true
-    validates :variant_id, uniqueness: { scope: [:stock_location_id, :deleted_at] }, allow_blank: true
+    validates :variant_id, uniqueness: { scope: [:stock_location_id, :deleted_at] }
 
     validates :count_on_hand, numericality: {
                               greater_than_or_equal_to: 0,
@@ -24,7 +24,7 @@ module Spree
     after_touch { variant.touch }
     after_destroy { variant.touch }
 
-    self.whitelisted_ransackable_attributes = ['count_on_hand', 'stock_location_id']
+    self.whitelisted_ransackable_attributes = ['count_on_hand', 'stock_location_id', 'variant_id']
     self.whitelisted_ransackable_associations = ['variant']
 
     scope :with_active_stock_location, -> { joins(:stock_location).merge(Spree::StockLocation.active) }
@@ -69,13 +69,24 @@ module Spree
       end
 
       # Process backorders based on amount of stock received
-      # If stock was -20 and is now -15 (increase of 5 units), then we should process 5 inventory orders.
+      # If stock was -20 and is now -15 (increase of 5 units), then we can process atmost 5 inventory orders.
       # If stock was -20 but then was -25 (decrease of 5 units), do nothing.
       def process_backorders(number)
-        if number > 0
-          backordered_inventory_units.first(number).each do |unit|
+        return unless number.positive?
+        units = backordered_inventory_units.first(number) # We can process atmost n backorders
+
+        units.each do |unit|
+          break unless number.positive?
+
+          if unit.quantity > number
+            # if required quantity is greater than available
+            # split off and fullfill that
+            split = unit.split_inventory!(number)
+            split.fill_backorder
+          else
             unit.fill_backorder
           end
+          number -= unit.quantity
         end
       end
 

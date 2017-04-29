@@ -159,7 +159,6 @@ describe 'Payments', type: :feature, js: true do
 
       it 'does not allow the amount to be edited' do
         within_row(1) do
-          expect(page).not_to have_selector('.fa-edit')
           expect(page).not_to have_selector('td.amount span')
         end
       end
@@ -226,6 +225,20 @@ describe 'Payments', type: :feature, js: true do
         click_icon(:capture)
         expect(page).to have_content("Payment Updated")
       end
+    end
+
+    context 'store_credit payment' do
+      let!(:payment_method) { create(:store_credit_payment_method) }
+      let!(:category) { create(:store_credit_category, name: 'Default') }
+      let!(:store_credit) { create(:store_credit, user: order.user, category: category, amount: 500) }
+
+      before do
+        visit spree.new_admin_order_payment_path(order.reload)
+        choose("payment_payment_method_id_#{payment_method.id}")
+        click_button 'Continue'
+      end
+
+      it { expect(page).to have_content('successfully created') }
     end
   end
 end

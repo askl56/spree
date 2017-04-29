@@ -49,6 +49,9 @@ module Spree
       if quantity.between?(1, 2_147_483_647)
         begin
           order.contents.add(variant, quantity, options)
+          order.update_line_item_prices!
+          order.create_tax_charge!
+          order.update_with_updater!
         rescue ActiveRecord::RecordInvalid => e
           error = e.record.errors.full_messages.join(", ")
         end
@@ -68,7 +71,7 @@ module Spree
 
     def populate_redirect
       flash[:error] = Spree.t(:populate_get_error)
-      redirect_to('/cart')
+      redirect_to cart_path
     end
 
     def empty

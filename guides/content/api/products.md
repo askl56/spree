@@ -20,6 +20,9 @@ GET /api/v1/products?page=2```
 show_deleted
 : **boolean** - `true` to show deleted products, `false` to hide them. Default: `false`. **Only available to users with an admin role.**
 
+ids
+: A comma-separated list of products ids. Specifying this parameter will display the respective products.
+
 page
 : The page number of products to display.
 
@@ -104,10 +107,10 @@ GET /api/v1/products/new```
 <%= headers 200 %>
 <%= json \
   attributes: [
-    :id, :name, :description, :price, :available_on, :permalink,
-    :count_on_hand, :meta_description, :meta_keywords, :shipping_category_id, :taxon_ids
+    :id, :name, :description, :price, :display_price, :available_on,
+    :slug, :meta_description, :meta_keywords, :shipping_category_id, :taxon_ids, :total_on_hand
   ],
-  required_attributes: [:name, :price, :shipping_category_id]
+  required_attributes: [:name, :shipping_category, :price]
  %>
 
 ## Create

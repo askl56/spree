@@ -22,8 +22,8 @@ module Spree
         def update
           if @order.update_attributes(order_params)
             @order.associate_user!(@user, @order.email.blank?) unless guest_checkout?
-            @order.next unless @order.complete?
-            @order.refresh_shipment_rates(Spree::ShippingMethod::DISPLAY_ON_FRONT_AND_BACK_END)
+            @order.next if @order.address?
+            @order.refresh_shipment_rates(Spree::ShippingMethod::DISPLAY_ON_BACK_END)
 
             if @order.errors.empty?
               flash[:success] = Spree.t('customer_details_updated')

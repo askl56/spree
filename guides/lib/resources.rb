@@ -133,6 +133,10 @@ module Spree
         headers(401) + json(error: "Token is invalid.")
       end
 
+      def no_api_key
+        headers(401) + json(error: "You must specify an API key.")
+      end
+
       def store_not_found
         headers(404) + json(error: "Store not found.")
       end
@@ -189,7 +193,8 @@ module Spree
         "name"=>"Small",
         "presentation"=>"S",
         "option_type_name"=>"tshirt-size",
-        "option_type_id"=>1
+        "option_type_id"=>1,
+        "option_type_presentation"=>"S",
       }
 
     OPTION_TYPE ||=
@@ -202,24 +207,41 @@ module Spree
 
     VARIANT ||=
        {
-         "id"=>1,
+          "id"=>1,
           "name"=>"Ruby on Rails Tote",
           "sku"=>"ROR-00011",
           "price"=>"15.99",
-          "display_price"=>"$15.99",
           "weight"=>nil,
           "height"=>nil,
           "width"=>nil,
           "depth"=>nil,
           "is_master"=>true,
-          "cost_price"=>"13.0",
-          "permalink"=>"ruby-on-rails-tote",
+          "slug"=>"ruby-on-rails-tote",
           "description"=>"A text description of the product.",
-          "options_text"=> "(Size: small, Colour: red)",
-          "in_stock" => true,
-          "option_values"=> [OPTION_VALUE],
-          "images"=> [IMAGE]
+          "track_inventory"=>true,
+          "cost_price"=>nil,
+          "option_values"=>[OPTION_VALUE],
+          "images"=>[IMAGE],
+          "display_price"=>"$15.99",
+          "options_text"=>"(Size: small, Colour: red)",
+          "in_stock"=>true,
+          "is_backorderable"=>true,
+          "is_orderable"=>true,
+          "total_on_hand"=>10,
+          "is_destroyed"=>false
        }
+
+    STOCK_ITEM ||=
+      {
+        "id"=>1,
+        "count_on_hand"=>10,
+        "backorderable"=>true,
+        "stock_location_id"=>1,
+        "variant_id"=>1,
+        "variant"=>VARIANT
+      }
+
+    VARIANT_BIG ||= VARIANT.merge("stock_items"=>[STOCK_ITEM])
 
     PRODUCT_PROPERTY ||=
       {
@@ -319,6 +341,26 @@ module Spree
       }
     }
 
+    TAXON ||=
+      {
+        "id"=>2,
+        "name"=>"Ruby on Rails",
+        "pretty_name"=>"Ruby on Rails",
+        "permalink"=>"brands/ruby-on-rails",
+        "parent_id"=>1,
+        "taxonomy_id"=>1,
+        "meta_title"=>"Ruby on Rails",
+        "meta_description"=>"Ruby on Rails",
+        "taxons"=>[]
+      }
+
+    CLASSIFICATION ||=
+      {
+        "taxon_id"=>3,
+        "position"=>1,
+        "taxon"=>TAXON
+      }
+
     PRODUCT ||=
       {
         "id"=>1,
@@ -327,24 +369,25 @@ module Spree
         "price"=>"15.99",
         "display_price"=>"$15.99",
         "available_on"=>"2012-10-17T03:43:57Z",
-        "permalink"=>"ruby-on-rails-tote",
+        "slug"=>"example-product",
         "meta_description"=>nil,
         "meta_keywords"=>nil,
-        "taxon_ids" => [1,2,3],
-        "shipping_category_id" => 1,
-        "has_variants" => true,
-        "master" => VARIANT.merge("is_master" => true),
-        "variants" => [VARIANT.merge("is_master" => false)],
-        "product_properties"=> [PRODUCT_PROPERTY],
-        "option_types" => [OPTION_TYPE]
+        "shipping_category_id"=>1,
+        "taxon_ids"=>[1,2,3],
+        "total_on_hand"=>10,
+        "master"=>VARIANT.merge("is_master" => true),
+        "variants"=>[VARIANT.merge("is_master" => false)],
+        "option_types"=>[OPTION_TYPE],
+        "product_properties"=>[PRODUCT_PROPERTY],
+        "classifications"=>[CLASSIFICATION],
+        "has_variants"=>true
       }
 
     PAYMENT_METHOD ||=
       {
         "id"=>732545999,
         "name"=>"Check",
-        "description"=>"Pay by check.",
-        "method_type"=>"check"
+        "description"=>"Pay by check."
       }
 
 
@@ -383,11 +426,12 @@ module Spree
         "id"=>1,
         "quantity"=>2,
         "price"=>"19.99",
-        "single_display_amount"=> "$19.99",
-        "total"=> "39.99",
-        "display_total"=> "$39.99",
         "variant_id"=>1,
-        "variant" => line_item_variant
+        "variant" => { "product_id"=>1 }.merge(line_item_variant),
+        "adjustments"=>[],
+        "single_display_amount"=> "$19.99",
+        "display_total"=> "$39.99",
+        "total"=> "39.99"
       }
 
     LINE_ITEM2 ||=
@@ -427,20 +471,46 @@ module Spree
         "source_type"=>"Spree::CreditCard",
         "source_id"=>1,
         "amount"=>"10.00",
+        "display_amount"=>"$10.00",
         "payment_method_id"=>1,
-        "response_code"=>"12345",
         "state"=>"checkout",
         "avs_response"=>nil,
         "created_at"=>"2012-10-24T23:26:23Z",
-        "updated_at"=>"2012-10-24T23:26:23Z"
+        "updated_at"=>"2012-10-24T23:26:23Z",
+        "number"=>"P58PJCXG"
+      }
+
+    SHIPPING_CATEGORY ||=
+      {
+        "id" => 1,
+        "name" => "Defaukt category"
+      }
+
+    ZONE_MEMBER ||=
+      {
+        "id"=>1,
+        "zoneable_type"=>"Spree::Country",
+        "zoneable_id"=>1
+      }
+
+    ZONE ||=
+      {
+        "id"=>1,
+        "name"=>"America",
+        "description"=>"The US",
+        "zone_members"=>[ZONE_MEMBER]
       }
 
     SHIPPING_METHOD ||=
       {
+        "id" => 1,
+        "code" => nil,
         "name" => "UPS Ground",
-        "zone_id" => 1,
-        "shipping_category_id" => 1
+        "zones" => [ZONE],
+        "shipping_categories" => [SHIPPING_CATEGORY]
       }
+
+    SHIPPING_METHOD_SMALL ||= SHIPPING_METHOD.select{ |k| %w(id name zones shipping_categories).include?(k)}
 
     SHIPPING_RATE ||=
       {
@@ -448,26 +518,100 @@ module Spree
         "name"=>"UPS Ground (USD)",
         "cost"=>5,
         "selected"=>true,
-        "shipment_id"=>1,
-        "shipping_method_id"=>5
-      }
-
-    MANIFEST ||=
-      {
-        "quantity"=>1,
-        "states"=>{"on_hand"=>1},
-        "variant" => VARIANT
+        "shipping_method_id"=>5,
+        "shipping_method_code"=>nil,
+        "display_cost"=>"$5.00"
       }
 
     INVENTORY_UNIT ||=
       {
         "id"=>1,
-        "lock_version"=>1,
         "state"=>"on_hand",
-        "variant_id"=>10,
+        "variant_id"=>1,
         "shipment_id"=>1,
-        "return_authorization_id"=>nil
+        "variant"=>VARIANT,
+        "line_item"=>LINE_ITEM.reject{ |k| %w(variant adjustments).include?(k) }
       }
+
+  CHECKOUT_STEPS ||= ["address,", "delivery", "complete"]
+
+  ORDER ||=
+    {
+      "id"=>1,
+      "number"=>"R335381310",
+      "item_total"=>"100.0",
+      "total"=>"100.0",
+      "ship_total"=>"0.0",
+      "state"=>"cart",
+      "adjustment_total"=>"-12.0",
+      "user_id"=>nil,
+      "created_at"=>"2012-10-24T01:02:25Z",
+      "updated_at"=>"2012-10-24T01:02:25Z",
+      "completed_at"=>nil,
+      "payment_total"=>"0.0",
+      "shipment_state"=>nil,
+      "payment_state"=>nil,
+      "email"=>nil,
+      "special_instructions"=>nil,
+      "channel"=>"spree",
+      "included_tax_total"=>"0.0",
+      "additional_tax_total"=>"0.0",
+      "display_included_tax_total"=>"$0.0",
+      "display_additional_tax_total"=>"$0.0",
+      "tax_total"=>"0.0",
+      "currency"=>"USD",
+      "considered_risky"=>false,
+      "canceler_id"=>nil,
+      "display_item_total"=>"$100.00",
+      "total_quantity"=>1,
+      "display_total"=>"$100.00",
+      "display_ship_total"=>"$0.00",
+      "display_tax_total"=>"$0.00",
+      "display_adjustment_total": "$0.00",
+      "token"=> "abcdef123456",
+      "checkout_steps"=> CHECKOUT_STEPS
+    }
+
+    ADDRESS_COUNTRY ||=
+      {
+        "id"=>1,
+        "iso_name"=>"UNITED STATES",
+        "iso"=>"US",
+        "iso3"=>"USA",
+        "name"=>"United States",
+        "numcode"=>1
+      }
+
+    ADDRESS_STATE ||=
+      {
+        "id"=>1,
+        "name"=>"New York",
+        "abbr"=>"NY",
+        "country_id"=>1
+      }
+
+    ADDRESS ||=
+      {
+        "id"=>1,
+        "firstname"=>"Spree",
+        "lastname"=>"Commerce",
+        "full_name"=>"Spree Commerce",
+        "address1"=>"1 Someplace Lane",
+        "address2"=>"Suite 1",
+        "city"=>"Bethesda",
+        "zipcode"=>"16804",
+        "phone"=>"123.4567.890",
+        "company"=>nil,
+        "alternative_phone"=>nil,
+        "country_id"=>1,
+        "state_id"=>1,
+        "state_name"=>nil,
+        "state_text"=>"NY",
+        "country"=> ADDRESS_COUNTRY,
+        "state" => ADDRESS_STATE
+      }
+
+    COUNTRY_STATE ||= { "state"=> ADDRESS_STATE }
 
     SHIPMENT ||=
       {
@@ -477,11 +621,38 @@ module Spree
         "cost"=>"5.0",
         "shipped_at"=>nil,
         "state"=>"pending",
-        "order_id"=>"R1234567",
-        "stock_location_name"=>"NY Warehouse",
+        "selected_shipping_rate"=>SHIPPING_RATE,
+        "inventory_units"=>[INVENTORY_UNIT],
+        "order"=>ORDER.merge({
+                               "state"=>"payment",
+                               "bill_address"=>ADDRESS,
+                               "ship_address"=>ADDRESS,
+                               "adjustments"=>[],
+                               "payments"=>[PAYMENT]
+                            })
+      }
+
+    MANIFEST ||=
+      {
+        "variant"=> VARIANT,
+        "quantity"=>1,
+        "states"=>{"on_hand"=>1}
+      }
+
+    SHIPMENT_SMALL ||=
+      {
+        "id"=>1,
+        "tracking"=>nil,
+        "number"=>"H71047039332",
+        "cost"=>"5.0",
+        "shipped_at"=>nil,
+        "state"=>"pending",
         "shipping_rates"=>[SHIPPING_RATE],
-        "shipping_method"=> SHIPPING_METHOD,
-        "manifest"=>[MANIFEST]
+        "selected_shipping_rate"=>[SHIPPING_RATE],
+        "shipping_methods"=>[SHIPPING_METHOD],
+        "manifest"=> [MANIFEST],
+        "order_id"=> 1,
+        "stock_location_name"=>"default"
       }
 
     SHIPMENT_SHIPPED ||=
@@ -499,56 +670,40 @@ module Spree
         "manifest"=>[MANIFEST]
       }
 
-    ORDER ||=
-      {
-        "id"=>1,
-        "number"=>"R335381310",
-        "item_total"=>"100.0",
-        "display_item_total"=>"$100.00",
-        "total"=>"100.0",
-        "display_total"=>"$100.00",
-        "state"=>"cart",
-        "adjustment_total"=>"-12.0",
-        "user_id"=>nil,
-        "created_at"=>"2012-10-24T01:02:25Z",
-        "updated_at"=>"2012-10-24T01:02:25Z",
-        "completed_at"=>nil,
-        "payment_total"=>"0.0",
-        "shipment_state"=>nil,
-        "payment_state"=>nil,
-        "email"=>nil,
-        "special_instructions"=>nil,
-        "total_quantity"=>1,
-        "token"=> "abcdef123456",
-        "line_items"=>[],
-        "adjustments"=>[],
-        "payments"=>[],
-        "shipments"=>[]
-      }
-
     NEW_ORDER ||= {
       "id"=>1,
       "number"=>"R335381310",
-      "item_total"=>"100.0",
-      "display_item_total"=>"$100.00",
+      "item_total"=>"0.0",
       "total"=>"0.0",
+      "ship_total"=>"0.0",
       "state"=>"cart",
-      "adjustment_total"=>"-0.0",
-      "user_id"=>nil,
+      "adjustment_total"=>"0.0",
+      "user_id"=>1,
       "created_at"=>"2012-10-24T01:02:25Z",
       "updated_at"=>"2012-10-24T01:02:25Z",
       "completed_at"=>nil,
       "payment_total"=>"0.0",
       "shipment_state"=>nil,
       "payment_state"=>nil,
-      "email"=>nil,
+      "email"=>"spree@example.com",
       "special_instructions"=>nil,
-      "total_quantity"=>1,
+      "channel"=>"spree",
+      "included_tax_total"=>"0.0",
+      "additional_tax_total"=>"0.0",
+      "display_included_tax_total"=>"$0.0",
+      "display_additional_tax_total"=>"$0.0",
+      "tax_total"=>"0.0",
+      "currency"=>"USD",
+      "considered_risky"=>false,
+      "canceler_id"=>nil,
+      "display_item_total"=>"$0.00",
+      "total_quantity"=>0,
+      "display_total"=>"$0.00",
+      "display_ship_total"=>"$0.00",
+      "display_tax_total"=>"$0.00",
+      "display_adjustment_total": "$0.00",
       "token"=> "abcdef123456",
-      "line_items"=>[],
-      "adjustments"=>[],
-      "payments"=>[],
-      "shipments"=>[]
+      "checkout_steps"=> CHECKOUT_STEPS
     }
 
     NEW_ORDER_WITH_LINE_ITEMS ||= NEW_ORDER.merge({
@@ -580,18 +735,25 @@ module Spree
     SHIPPED_SHIPMENT ||= SHIPMENT.merge({"state" => "shipped"})
 
     ORDER_SHOW ||= ORDER.merge({
+      "bill_address" => nil,
+      "ship_address" => nil,
       "line_items" => [LINE_ITEM],
       "payments" => [],
-      "adjustments" => []
-
+      "shipments" => [],
+      "adjustments" => [],
+      "credit_cards" => [],
+      "permissions" => { "can_update" => true },
     })
 
-    ORDER_SHOW2 ||= ORDER.merge({
-      "line_items" => [LINE_ITEM2],
-      "payments" => [PAYMENT],
-      "shipments" => [SHIPMENT],
-      "adjustments" => [ADJUSTMENT]
-
+    NEW_ORDER_SHOW ||= NEW_ORDER.merge({
+      "bill_address" => nil,
+      "ship_address" => nil,
+      "line_items" => [],
+      "payments" => [],
+      "shipments" => [],
+      "adjustments" => [],
+      "credit_cards" => [],
+      "permissions" => { "can_update" => true }
     })
 
     EVENT ||= {
@@ -630,7 +792,7 @@ module Spree
       "event" => 'order:updated',
       "event_id" => '510bfe8e7575e41e41000002',
       "payload" => {
-        "order" => ORDER_SHOW2
+        "order" => ORDER_SHOW
       }
     }
 
@@ -744,7 +906,7 @@ module Spree
       "state" => "complete"
     })
 
-    ADDRESS_COUNTRY ||=
+    COUNTRY ||=
       {
         "id"=>1,
         "iso_name"=>"UNITED STATES",
@@ -754,76 +916,31 @@ module Spree
         "numcode"=>1
       }
 
-    ADDRESS_STATE ||=
-      {
-        "abbr"=>"NY",
-        "country_id"=>1,
-        "id"=>1,
-        "name"=>"New York"
-      }
-
-    ADDRESS ||=
-      {
-        "id"=>1,
-        "firstname"=>"Spree",
-        "lastname"=>"Commerce",
-        "address1"=>"1 Someplace Lane",
-        "address2"=>"Suite 1",
-        "city"=>"Bethesda",
-        "zipcode"=>"16804",
-        "phone"=>"123.4567.890",
-        "company"=>nil,
-        "alternative_phone"=>nil,
-        "country_id"=>1,
-        "state_id"=>1,
-        "state_name"=>nil,
-        "country"=> ADDRESS_COUNTRY,
-        "state" => ADDRESS_STATE
-      }
-
-    COUNTRY_STATE ||= { "state"=> ADDRESS_STATE }
-
-    COUNTRY ||=
-      {
-        "id"=>1,
-        "iso_name"=>"UNITED STATES",
-        "iso"=>"US",
-        "iso3"=>"USA",
-        "name"=>"United States",
-        "numcode"=>1,
-        "states"=> [COUNTRY_STATE]
-      }
-
     STATE ||=
       {
-        "abbr"=>"NY",
-        "country_id"=>1,
         "id"=>1,
-        "name"=>"New York"
+        "name"=>"New York",
+        "abbr"=>"NY",
+        "country_id"=>1
       }
 
-    TAXON ||=
-      {
-        "id"=>2,
-        "name"=>"Ruby on Rails",
-        "permalink"=>"brands/ruby-on-rails",
-        "position"=>1,
-        "parent_id"=>1,
-        "taxonomy_id"=>1
-      }
+    COUNTRY_WITH_STATE ||= COUNTRY.merge("states" => [STATE])
 
     SECONDARY_TAXON ||=
       {
         "id"=>3,
         "name"=>"T-Shirts",
-        "permalink"=>"brands/ruby-on-rails/t-shirts",
-        "position"=>1,
-        "parent_id"=>2,
-        "taxonomy_id"=>1
+        "pretty_name"=>"T-Shirts",
+        "permalink"=>"brands/t-shirts",
+        "parent_id"=>1,
+        "taxonomy_id"=>1,
+        "meta_title"=>"T-Shirts",
+        "meta_description"=>"T-Shirts",
+        "taxons"=>[]
       }
 
-    TAXON_WITH_CHILDREN ||= TAXON.merge(taxons: [SECONDARY_TAXON])
-    TAXON_WITHOUT_CHILDREN ||= TAXON.merge(taxons: [])
+    TAXON_WITH_CHILDREN ||= TAXON.merge("taxons" => [SECONDARY_TAXON])
+    TAXON_WITHOUT_CHILDREN ||= TAXON.merge("taxons" => [])
 
     TAXONOMY ||=
      {
@@ -839,30 +956,13 @@ module Spree
         "root" => TAXON_WITHOUT_CHILDREN
       }
 
-    ZONE_MEMBER ||=
-      {
-        "id"=>1,
-        "name"=>"United States",
-        "zoneable_type"=>"Spree::Country",
-        "zoneable_id"=>1,
-      }
-
-    ZONE ||=
-      {
-        "id"=>1,
-        "name"=>"America",
-        "description"=>"The US",
-        "zone_members"=> [ZONE_MEMBER]
-      }
-
     RETURN_AUTHORIZATION ||=
       {
         "id"=>1,
-        "number"=>"12345",
+        "number"=>"RA010584183",
         "state"=>"authorized",
-        "amount"=> 14.22,
         "order_id"=>14,
-        "reason"=>"Didn't fit",
+        "memo"=>"Didn't fit",
         "created_at"=>"2012-10-24T23:26:23Z",
         "updated_at"=>"2012-10-24T23:26:23Z"
       }
@@ -874,29 +974,22 @@ module Spree
         "address1"=>"7735 Old Georgetown Road",
         "address2"=>"Suite 510",
         "city"=>"Bethesda",
-        "state_id"=>26,
-        "country_id"=>49,
+        "state_id"=>1,
+        "state_name"=>nil,
+        "country_id"=>1,
         "zipcode"=>"20814",
         "phone"=>"",
-        "active"=>true
-      }
-
-    STOCK_ITEM ||=
-      {
-        "id"=>1,
-        "count_on_hand"=>10,
-        "backorderable"=>true,
-        "lock_version"=>1,
-        "stock_location_id"=>1,
-        "variant_id"=>1
+        "active"=>true,
+        "country"=>COUNTRY.reject{ |k| k == "states" },
+        "state"=>COUNTRY_STATE
       }
 
     STOCK_MOVEMENT ||=
       {
         "id"=>1,
         "quantity"=>10,
-        "action"=>"received",
-        "stock_item_id"=>1
+        "stock_item_id"=>1,
+        "stock_item"=>STOCK_ITEM
       }
 
     MESSAGE ||=
