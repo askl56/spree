@@ -716,11 +716,13 @@ en:
     error: error
     errors:
       messages:
+        blank: can't be blank
         could_not_create_taxon: Could not create taxon
         no_shipping_methods_available: No shipping methods available for selected location, please change your address and try again.
     errors_prohibited_this_record_from_being_saved:
       one: 1 error prohibited this record from being saved
       other: ! '%{count} errors prohibited this record from being saved'
+    error_user_destroy_with_orders: User associated with orders cannot be destroyed
     event: Event
     events:
       spree:
@@ -1373,6 +1375,7 @@ en:
       captured: "Used"
       allocated: "Added"
       apply: Apply Store Credit
+      remove: Remove Store Credit
       applicable_amount: "%{amount} in store credit will be applied to this order."
       available_amount: "You have %{amount} in Store Credit available!"
       remaining_amount: "You have %{amount} remaining in your account's Store Credit."

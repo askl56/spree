@@ -23,15 +23,6 @@ module Spree
 
       helper Spree::Api::ApiHelpers
 
-      def map_nested_attributes_keys(klass, attributes)
-        nested_keys = klass.nested_attributes_options.keys
-        attributes.to_h.inject({}) do |h, (k,v)|
-          key = nested_keys.include?(k.to_sym) ? "#{k}_attributes" : k
-          h[key] = v
-          h
-        end.with_indifferent_access
-      end
-
       # users should be able to set price when importing orders via api
       def permitted_line_item_attributes
         if @current_user_roles.include?("admin")
@@ -132,7 +123,7 @@ module Spree
       end
 
       def find_product(id)
-        product_scope.friendly.find(id.to_s)
+        product_scope.friendly.distinct(false).find(id.to_s)
       rescue ActiveRecord::RecordNotFound
         product_scope.find(id)
       end

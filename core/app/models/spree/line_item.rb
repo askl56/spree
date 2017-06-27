@@ -85,11 +85,6 @@ module Spree
     alias total final_amount
     alias money display_total
 
-    def invalid_quantity_check
-      warn "`invalid_quantity_check` is deprecated. Use private `ensure_valid_quantity` instead."
-      ensure_valid_quantity
-    end
-
     def sufficient_stock?
       Stock::Quantifier.new(variant).can_supply? quantity
     end
@@ -132,7 +127,7 @@ module Spree
     end
 
     def update_inventory
-      if (changed? || target_shipment.present?) && order.has_checkout_step?("delivery")
+      if (saved_changes? || target_shipment.present?) && order.has_checkout_step?("delivery")
         verify_order_inventory
       end
     end
@@ -146,7 +141,7 @@ module Spree
     end
 
     def update_adjustments
-      if quantity_changed?
+      if saved_change_to_quantity?
         recalculate_adjustments
         update_tax_charge # Called to ensure pre_tax_amount is updated.
       end

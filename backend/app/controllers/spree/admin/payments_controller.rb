@@ -17,6 +17,8 @@ module Spree
       end
 
       def new
+        # Move order to payment state in order to capture tax generated on shipments
+        @order.next if @order.can_go_to_state?('payment')
         @payment = @order.payments.build
       end
 
@@ -35,7 +37,7 @@ module Spree
             payments = [@payment]
           end
 
-          if (saved_payments = payments.select &:persisted?).any?
+          if payments && (saved_payments = payments.select &:persisted?).any?
             invoke_callbacks(:create, :after)
 
             # Transition order as far as it will go.
@@ -47,6 +49,7 @@ module Spree
             flash[:success] = flash_message_for(saved_payments.first, :successfully_created)
             redirect_to admin_order_payments_path(@order)
           else
+            @payment ||= @order.payments.build(object_params)
             invoke_callbacks(:create, :fails)
             flash[:error] = Spree.t(:payment_could_not_be_created)
             render :new
@@ -96,13 +99,13 @@ module Spree
       end
 
       def load_order
-        @order = Order.friendly.find(params[:order_id])
+        @order = Order.find_by!(number: params[:order_id])
         authorize! action, @order
         @order
       end
 
       def load_payment
-        @payment = Payment.friendly.find(params[:id])
+        @payment = Payment.find_by!(number: params[:id])
       end
 
       def model_class

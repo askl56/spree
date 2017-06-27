@@ -5,7 +5,7 @@ module Spree
 
     attr_reader :eligibility_errors
 
-    belongs_to :promotion_category
+    belongs_to :promotion_category, optional: true
 
     has_many :promotion_rules, autosave: true, dependent: :destroy
     alias_method :rules, :promotion_rules
@@ -21,7 +21,7 @@ module Spree
     validates_associated :rules
 
     validates :name, presence: true
-    validates :path, uniqueness: { allow_blank: true }
+    validates :path, :code, uniqueness: { case_sensitive: false, allow_blank: true }
     validates :usage_limit, numericality: { greater_than: 0, allow_nil: true }
     validates :description, length: { maximum: 255 }, allow_blank: true
     validate :expires_at_must_be_later_than_starts_at, if: -> { starts_at && expires_at }
