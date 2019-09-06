@@ -1,14 +1,15 @@
 # This file is copied to ~/spec when you run 'ruby script/generate rspec'
 # from the project root directory.
-ENV["RAILS_ENV"] ||= 'test'
-require File.expand_path("../dummy/config/environment", __FILE__)
+ENV['RAILS_ENV'] ||= 'test'
+
+require File.expand_path('../dummy/config/environment', __FILE__)
 require 'rspec/rails'
 require 'ffaker'
 require 'spree_sample'
-require 'spree/testing_support/shoulda_matcher_configuration'
 
 RSpec.configure do |config|
   config.color = true
+  config.default_formatter = 'doc'
   config.fail_fast = ENV['FAIL_FAST'] || false
   config.infer_spec_type_from_file_location!
   config.mock_with :rspec
@@ -19,7 +20,7 @@ RSpec.configure do |config|
   # instead of true.
   config.use_transactional_fixtures = true
 
-  config.include FactoryGirl::Syntax::Methods
+  config.include FactoryBot::Syntax::Methods
 
   config.order = :random
   Kernel.srand config.seed

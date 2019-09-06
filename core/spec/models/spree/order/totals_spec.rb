@@ -5,18 +5,18 @@ module Spree
     let(:order) { Order.create }
     let(:shirt) { create(:variant) }
 
-    context "adds item to cart and activates promo" do
+    context 'adds item to cart and activates promo' do
       let(:promotion) { Promotion.create name: 'Huhu' }
       let(:calculator) { Calculator::FlatPercentItemTotal.new(preferred_flat_percent: 10) }
       let!(:action) { Promotion::Actions::CreateAdjustment.create(promotion: promotion, calculator: calculator) }
 
-      before { order.contents.add(shirt, 1) }
+      before { Spree::Cart::AddItem.call(order: order, variant: shirt).value }
 
-      context "item quantity changes" do
-        it "recalculates order adjustments" do
-          expect {
-            order.contents.add(shirt, 3)
-          }.to change { order.adjustments.eligible.pluck(:amount) }
+      context 'item quantity changes' do
+        it 'recalculates order adjustments' do
+          expect do
+            Spree::Cart::AddItem.call(order: order, variant: shirt, quantity: 3)
+          end.to change { order.adjustments.eligible.pluck(:amount) }
         end
       end
     end

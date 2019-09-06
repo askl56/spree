@@ -2,7 +2,7 @@ module Spree
   module Admin
     class OrdersController < Spree::Admin::BaseController
       before_action :initialize_order_events
-      before_action :load_order, only: [:edit, :update, :cancel, :resume, :approve, :resend, :open_adjustments, :close_adjustments, :cart]
+      before_action :load_order, only: [:edit, :update, :cancel, :resume, :approve, :resend, :open_adjustments, :close_adjustments, :cart, :store, :set_store]
 
       respond_to :html
 
@@ -19,14 +19,22 @@ module Spree
         created_at_gt = params[:q][:created_at_gt]
         created_at_lt = params[:q][:created_at_lt]
 
-        params[:q].delete(:inventory_units_shipment_id_null) if params[:q][:inventory_units_shipment_id_null] == "0"
+        params[:q].delete(:inventory_units_shipment_id_null) if params[:q][:inventory_units_shipment_id_null] == '0'
 
         if params[:q][:created_at_gt].present?
-          params[:q][:created_at_gt] = Time.zone.parse(params[:q][:created_at_gt]).beginning_of_day rescue ""
+          params[:q][:created_at_gt] = begin
+                                         Time.zone.parse(params[:q][:created_at_gt]).beginning_of_day
+                                       rescue StandardError
+                                         ''
+                                       end
         end
 
         if params[:q][:created_at_lt].present?
-          params[:q][:created_at_lt] = Time.zone.parse(params[:q][:created_at_lt]).end_of_day rescue ""
+          params[:q][:created_at_lt] = begin
+                                         Time.zone.parse(params[:q][:created_at_lt]).end_of_day
+                                       rescue StandardError
+                                         ''
+                                       end
         end
 
         if @show_only_completed
@@ -40,8 +48,8 @@ module Spree
         # e.g. SELECT  DISTINCT DISTINCT "spree_orders".id, "spree_orders"."created_at" AS alias_0 FROM "spree_orders"
         # see https://github.com/spree/spree/pull/3919
         @orders = @search.result(distinct: true).
-          page(params[:page]).
-          per(params[:per_page] || Spree::Config[:admin_orders_per_page])
+                  page(params[:page]).
+                  per(params[:per_page] || Spree::Config[:admin_orders_per_page])
 
         # Restore dates
         params[:q][:created_at_gt] = created_at_gt
@@ -56,20 +64,23 @@ module Spree
       def edit
         can_not_transition_without_customer_info
 
-        @order.refresh_shipment_rates(ShippingMethod::DISPLAY_ON_BACK_END)
+        @order.refresh_shipment_rates(ShippingMethod::DISPLAY_ON_BACK_END) unless @order.completed?
       end
 
       def cart
-        unless @order.completed?
-          @order.refresh_shipment_rates
-        end
-        if @order.shipments.shipped.count > 0
+        @order.refresh_shipment_rates(ShippingMethod::DISPLAY_ON_BACK_END) unless @order.completed?
+
+        if @order.shipments.shipped.exists?
           redirect_to edit_admin_order_url(@order)
         end
       end
 
+      def store
+        @stores = Spree::Store.all
+      end
+
       def update
-        if @order.update_attributes(params[:order]) && @order.line_items.present?
+        if @order.update(params[:order]) && @order.line_items.present?
           @order.update_with_updater!
           unless @order.completed?
             # Jump to next step if order is not completed.
@@ -108,7 +119,7 @@ module Spree
       end
 
       def open_adjustments
-        adjustments = @order.all_adjustments.closed
+        adjustments = @order.all_adjustments.finalized
         adjustments.update_all(state: 'open')
         flash[:success] = Spree.t(:all_adjustments_opened)
 
@@ -116,32 +127,43 @@ module Spree
       end
 
       def close_adjustments
-        adjustments = @order.all_adjustments.open
+        adjustments = @order.all_adjustments.not_finalized
         adjustments.update_all(state: 'closed')
         flash[:success] = Spree.t(:all_adjustments_closed)
 
         respond_with(@order) { |format| format.html { redirect_back fallback_location: spree.admin_order_adjustments_url(@order) } }
       end
 
+      def set_store
+        if @order.update(store_id: params[:order][:store_id])
+          flash[:success] = flash_message_for(@order, :successfully_updated)
+        else
+          flash[:error] = @order.errors.full_messages.join(', ')
+        end
+
+        redirect_to store_admin_order_url(@order)
+      end
+
       private
-        def order_params
-          params[:created_by_id] = try_spree_current_user.try(:id)
-          params.permit(:created_by_id, :user_id)
-        end
 
-        def load_order
-          @order = Spree::Order.includes(:adjustments).find_by!(number: params[:id])
-          authorize! action, @order
-        end
+      def order_params
+        params[:created_by_id] = try_spree_current_user.try(:id)
+        params.permit(:created_by_id, :user_id, :store_id)
+      end
 
-        # Used for extensions which need to provide their own custom event links on the order details view.
-        def initialize_order_events
-          @order_events = %w{approve cancel resume}
-        end
+      def load_order
+        @order = Spree::Order.includes(:adjustments).find_by!(number: params[:id])
+        authorize! action, @order
+      end
 
-        def model_class
-          Spree::Order
-        end
+      # Used for extensions which need to provide their own custom event links on the order details view.
+      def initialize_order_events
+        @order_events = %w{approve cancel resume}
+      end
+
+      def model_class
+        Spree::Order
+      end
     end
   end
 end

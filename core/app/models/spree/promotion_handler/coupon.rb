@@ -17,18 +17,38 @@ module Spree
           else
             set_error_code :coupon_code_not_found
           end
+        else
+          set_error_code :coupon_code_not_found
         end
         self
       end
 
-      def set_success_code(c)
-        @status_code = c
-        @success = Spree.t(c)
+      def remove(coupon_code)
+        promotion = order.promotions.with_coupon_code(coupon_code)
+
+        if promotion.present?
+          # Order promotion has to be destroyed before line item removing
+          order.order_promotions.find_by!(promotion_id: promotion.id).destroy
+
+          remove_promotion_adjustments(promotion)
+          remove_promotion_line_items(promotion)
+          order.update_with_updater!
+
+          set_success_code :adjustments_deleted
+        else
+          set_error_code :coupon_code_not_found
+        end
+        self
       end
 
-      def set_error_code(c)
-        @status_code = c
-        @error = Spree.t(c)
+      def set_success_code(code)
+        @status_code = code
+        @success = Spree.t(code)
+      end
+
+      def set_error_code(code)
+        @status_code = code
+        @error = Spree.t(code)
       end
 
       def promotion
@@ -43,9 +63,27 @@ module Spree
 
       private
 
+      def remove_promotion_adjustments(promotion)
+        promotion_actions_ids = promotion.actions.pluck(:id)
+        order.all_adjustments.where(source_id: promotion_actions_ids,
+                                    source_type: 'Spree::PromotionAction').destroy_all
+      end
+
+      def remove_promotion_line_items(promotion)
+        create_line_item_actions_ids = promotion.actions.where(type: 'Spree::Promotion::Actions::CreateLineItems').pluck(:id)
+
+        Spree::PromotionActionLineItem.where(promotion_action: create_line_item_actions_ids).find_each do |item|
+          line_item = order.find_line_item_by_variant(item.variant)
+          next if line_item.blank?
+
+          Spree::Dependencies.cart_remove_item_service(order: order, item: item.variant, quantity: item.quantity)
+        end
+      end
+
       def handle_present_promotion
         return promotion_usage_limit_exceeded if promotion.usage_limit_exceeded?(order)
         return promotion_applied if promotion_exists_on_order?
+
         unless promotion.eligible?(order)
           self.error = promotion.eligibility_errors.full_messages.first unless promotion.eligibility_errors.blank?
           return (error || ineligible_for_this_order)

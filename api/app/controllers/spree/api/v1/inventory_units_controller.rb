@@ -13,7 +13,7 @@ module Spree
           authorize! :update, inventory_unit.order
 
           inventory_unit.transaction do
-            if inventory_unit.update_attributes(inventory_unit_params)
+            if inventory_unit.update(inventory_unit_params)
               fire
               render :show, status: 200
             else
@@ -25,7 +25,7 @@ module Spree
         private
 
         def inventory_unit
-          @inventory_unit ||= InventoryUnit.accessible_by(current_ability, :read).find(params[:id])
+          @inventory_unit ||= InventoryUnit.accessible_by(current_ability, :show).find(params[:id])
         end
 
         def prepare_event
@@ -34,7 +34,7 @@ module Spree
           can_event = "can_#{@event}?"
 
           unless inventory_unit.respond_to?(can_event) &&
-                 inventory_unit.send(can_event)
+              inventory_unit.send(can_event)
             render plain: { exception: "cannot transition to #{@event}" }.to_json,
                    status: 200
             false
@@ -44,7 +44,7 @@ module Spree
         def fire
           inventory_unit.send("#{@event}!") if @event
         end
-        
+
         def inventory_unit_params
           params.require(:inventory_unit).permit(permitted_inventory_unit_attributes)
         end

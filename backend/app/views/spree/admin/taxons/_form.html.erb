@@ -1,6 +1,6 @@
 <div data-hook="admin_inside_taxon_form">
   <div class="row">
-    <div class="col-xs-12 col-md-5">
+    <div class="col-12 col-md-5">
       <%= f.field_container :name, class: ['form-group'] do %>
         <%= f.label :name, Spree.t(:name) %> <span class="required">*</span>
         <%= text_field :taxon, :name, class: 'form-control' %>
@@ -10,18 +10,19 @@
       <%= f.field_container :permalink, class: ['form-group'] do %>
         <%= label_tag :permalink_part, Spree.t(:permalink) %> <span class="required">*</span>
         <%= text_field_tag :permalink_part, @permalink_part, class: 'form-control', required: true %>
-        <p class="help-block" id="permalink_part_display">
+        <small class="form-text text-muted" id="permalink_part_display">
           <%= @taxon.permalink.split('/')[0...-1].join('/') + '/' %>
-        </p>
+        </small>
       <% end %>
 
       <%= f.field_container :icon, class: ['form-group'] do %>
         <%= f.label :icon, Spree.t(:icon) %>
+        <%= image_tag main_app.url_for(@taxon.icon.try(:attachment)) if @taxon.icon %>
         <%= f.file_field :icon %>
       <% end %>
     </div>
 
-    <div class="col-xs-12 col-md-7">
+    <div class="col-12 col-md-7">
       <%= f.field_container :description, class: ['form-group'] do %>
         <%= f.label :description, Spree.t(:description) %>
         <%= f.text_area :description, class: 'form-control', rows: 6 %>

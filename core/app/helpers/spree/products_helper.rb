@@ -14,6 +14,7 @@ module Spree
       variant_amount = variant.amount_in(current_currency)
       product_amount = variant.product.amount_in(current_currency)
       return if variant_amount == product_amount || product_amount.nil?
+
       diff   = variant.amount_in(current_currency) - product_amount
       amount = Spree::Money.new(diff.abs, currency: current_currency).to_html
       label  = diff > 0 ? :add : :subtract
@@ -24,7 +25,7 @@ module Spree
     def variant_full_price(variant)
       product = variant.product
       unless product.variants.active(current_currency).all? { |v| v.price == product.price }
-        Spree::Money.new(variant.price, { currency: current_currency }).to_html
+        Spree::Money.new(variant.price, currency: current_currency).to_html
       end
     end
 
@@ -35,10 +36,10 @@ module Spree
                     else
                       product.description.to_s.gsub(/(.*?)\r?\n\r?\n/m, '<p>\1</p>')
                     end
-      description.blank? ? Spree.t(:product_has_no_description) : raw(description)
+      description.blank? ? Spree.t(:product_has_no_description) : description
     end
 
-    def line_item_description_text description_text
+    def line_item_description_text(description_text)
       if description_text.present?
         truncate(strip_tags(description_text.gsub('&nbsp;', ' ').squish), length: 100)
       else
@@ -50,20 +51,20 @@ module Spree
       count = @products.count
       max_updated_at = (@products.maximum(:updated_at) || Date.today).to_s(:number)
       products_cache_keys = "spree/products/all-#{params[:page]}-#{max_updated_at}-#{count}"
-      (common_product_cache_keys + [products_cache_keys]).compact.join("/")
+      (common_product_cache_keys + [products_cache_keys]).compact.join('/')
     end
 
     def cache_key_for_product(product = @product)
-      (common_product_cache_keys + [product.cache_key, product.possible_promotions]).compact.join("/")
+      (common_product_cache_keys + [product.cache_key_with_version, product.possible_promotions]).compact.join('/')
     end
 
     def available_status(product) # will return a human readable string
       return Spree.t(:discontinued)  if product.discontinued?
-      return Spree.t(:deleted)  if product.deleted?
+      return Spree.t(:deleted) if product.deleted?
 
       if product.available?
         Spree.t(:available)
-      elsif product.available_on && product.available_on.future?
+      elsif product.available_on&.future?
         Spree.t(:pending_sale)
       else
         Spree.t(:no_available_date_set)

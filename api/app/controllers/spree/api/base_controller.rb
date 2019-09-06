@@ -3,6 +3,8 @@ require_dependency 'spree/api/controller_setup'
 module Spree
   module Api
     class BaseController < ActionController::Base
+      protect_from_forgery unless: -> { request.format.json? || request.format.xml? }
+
       include Spree::Api::ControllerSetup
       include Spree::Core::ControllerHelpers::Store
       include Spree::Core::ControllerHelpers::StrongParameters
@@ -11,7 +13,7 @@ module Spree
 
       before_action :set_content_type
       before_action :load_user
-      before_action :authorize_for_order, if: Proc.new { order_token.present? }
+      before_action :authorize_for_order, if: proc { order_token.present? }
       before_action :authenticate_user
       before_action :load_user_roles
 
@@ -25,7 +27,7 @@ module Spree
 
       # users should be able to set price when importing orders via api
       def permitted_line_item_attributes
-        if @current_user_roles.include?("admin")
+        if @current_user_roles.include?('admin')
           super + [:price, :variant_id, :sku]
         else
           super
@@ -34,17 +36,17 @@ module Spree
 
       def content_type
         case params[:format]
-        when "json"
-          "application/json; charset=utf-8"
-        when "xml"
-          "text/xml; charset=utf-8"
+        when 'json'
+          'application/json; charset=utf-8'
+        when 'xml'
+          'text/xml; charset=utf-8'
         end
       end
 
       private
 
       def set_content_type
-        headers["Content-Type"] = content_type
+        headers['Content-Type'] = content_type
       end
 
       def load_user
@@ -65,11 +67,11 @@ module Spree
       end
 
       def invalid_api_key
-        render "spree/api/errors/invalid_api_key", status: 401
+        render 'spree/api/errors/invalid_api_key', status: 401
       end
 
       def must_specify_api_key
-        render "spree/api/errors/must_specify_api_key", status: 401
+        render 'spree/api/errors/must_specify_api_key', status: 401
       end
 
       def load_user_roles
@@ -77,7 +79,7 @@ module Spree
       end
 
       def unauthorized
-        render "spree/api/errors/unauthorized", status: 401 and return
+        render 'spree/api/errors/unauthorized', status: 401 and return
       end
 
       def error_during_processing(exception)
@@ -101,45 +103,42 @@ module Spree
       end
 
       def not_found
-        render "spree/api/errors/not_found", status: 404 and return
+        render 'spree/api/errors/not_found', status: 404 and return
       end
 
       def current_ability
-        Spree::Ability.new(current_api_user)
+        Spree::Dependencies.ability_class.constantize.new(current_api_user)
       end
 
       def invalid_resource!(resource)
         @resource = resource
-        render "spree/api/errors/invalid_resource", status: 422
+        render 'spree/api/errors/invalid_resource', status: 422
       end
 
       def api_key
-        request.headers["X-Spree-Token"] || params[:token]
+        request.headers['X-Spree-Token'] || params[:token]
       end
       helper_method :api_key
 
       def order_token
-        request.headers["X-Spree-Order-Token"] || params[:order_token]
+        request.headers['X-Spree-Order-Token'] || params[:order_token]
       end
 
       def find_product(id)
-        product_scope.friendly.distinct(false).find(id.to_s)
+        @product = product_scope.friendly.distinct(false).find(id.to_s)
       rescue ActiveRecord::RecordNotFound
-        product_scope.find(id)
+        @product = product_scope.find_by(id: id)
+        not_found unless @product
       end
 
       def product_scope
-        if @current_user_roles.include?("admin")
-          scope = Product.with_deleted.accessible_by(current_ability, :read).includes(*product_includes)
+        if @current_user_roles.include?('admin')
+          scope = Product.with_deleted.accessible_by(current_ability, :show).includes(*product_includes)
 
-          unless params[:show_deleted]
-            scope = scope.not_deleted
-          end
-          unless params[:show_discontinued]
-            scope = scope.not_discontinued
-          end
+          scope = scope.not_deleted unless params[:show_deleted]
+          scope = scope.not_discontinued unless params[:show_discontinued]
         else
-          scope = Product.accessible_by(current_ability, :read).active.includes(*product_includes)
+          scope = Product.accessible_by(current_ability, :show).active.includes(*product_includes)
         end
 
         scope
@@ -159,7 +158,7 @@ module Spree
 
       def authorize_for_order
         @order = Spree::Order.find_by(number: order_id)
-        authorize! :read, @order, order_token
+        authorize! :show, @order, order_token
       end
     end
   end

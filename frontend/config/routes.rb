@@ -1,4 +1,7 @@
 Spree::Core::Engine.add_routes do
+  root to: 'home#index'
+
+  resources :products, only: [:index, :show]
 
   get '/locale/set', to: 'locale#set'
 
@@ -13,6 +16,8 @@ Spree::Core::Engine.add_routes do
     post :populate, on: :collection
   end
 
+  resources :addresses, except: [:show]
+
   get '/cart', to: 'orders#edit', as: :cart
   patch '/cart', to: 'orders#update', as: :update_cart
   put '/cart/empty', to: 'orders#empty', as: :empty_cart
@@ -22,6 +27,9 @@ Spree::Core::Engine.add_routes do
 
   get '/unauthorized', to: 'home#unauthorized', as: :unauthorized
   get '/content/cvv', to: 'content#cvv', as: :cvv
-  get '/content/*path', to: 'content#show', as: :content
+  get '/content/test', to: 'content#test'
   get '/cart_link', to: 'store#cart_link', as: :cart_link
+
+  get '/api_tokens', to: 'store#api_tokens'
+  post '/ensure_cart', to: 'store#ensure_cart'
 end

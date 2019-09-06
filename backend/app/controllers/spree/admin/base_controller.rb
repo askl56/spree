@@ -2,7 +2,7 @@ module Spree
   module Admin
     class BaseController < Spree::BaseController
       helper 'spree/admin/navigation'
-      layout '/spree/layouts/admin'
+      layout 'spree/layouts/admin'
 
       before_action :authorize_admin
       before_action :generate_admin_api_key
@@ -14,11 +14,11 @@ module Spree
       end
 
       def authorize_admin
-        if respond_to?(:model_class, true) && model_class
-          record = model_class
-        else
-          record = controller_name.to_sym
-        end
+        record = if respond_to?(:model_class, true) && model_class
+                   model_class
+                 else
+                   controller_name.to_sym
+                 end
         authorize! :admin, record
         authorize! action, record
       end

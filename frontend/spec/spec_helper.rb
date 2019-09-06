@@ -1,24 +1,26 @@
-if ENV["COVERAGE"]
+if ENV['COVERAGE']
   # Run Coverage report
   require 'simplecov'
-  SimpleCov.start do
-    add_group 'Controllers', 'app/controllers'
-    add_group 'Helpers', 'app/helpers'
-    add_group 'Mailers', 'app/mailers'
-    add_group 'Models', 'app/models'
-    add_group 'Views', 'app/views'
-    add_group 'Libraries', 'lib'
+  SimpleCov.start 'rails' do
+    add_group 'Libraries', 'lib/spree'
+
+    add_filter '/bin/'
+    add_filter '/db/'
+    add_filter '/script/'
+    add_filter '/spec/'
+
+    coverage_dir "#{ENV['COVERAGE_DIR']}/frontend" if ENV['COVERAGE_DIR']
   end
 end
 
 # This file is copied to ~/spec when you run 'ruby script/generate rspec'
 # from the project root directory.
-ENV["RAILS_ENV"] ||= 'test'
+ENV['RAILS_ENV'] ||= 'test'
 
 begin
-  require File.expand_path("../dummy/config/environment", __FILE__)
+  require File.expand_path('../dummy/config/environment', __FILE__)
 rescue LoadError
-  puts "Could not load dummy application. Please ensure you have run `bundle exec rake test_app`"
+  puts 'Could not load dummy application. Please ensure you have run `bundle exec rake test_app`'
   exit
 end
 
@@ -27,13 +29,12 @@ require 'ffaker'
 
 # Requires supporting files with custom matchers and macros, etc,
 # in ./support/ and its subdirectories.
-Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each {|f| require f}
+Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each { |f| require f }
 
 require 'database_cleaner'
+require 'rspec/retry'
 
-if ENV["CHECK_TRANSLATIONS"]
-  require "spree/testing_support/i18n"
-end
+require 'spree/testing_support/i18n' if ENV['CHECK_TRANSLATIONS']
 
 require 'spree/testing_support/authorization_helpers'
 require 'spree/testing_support/capybara_ext'
@@ -44,25 +45,15 @@ require 'spree/testing_support/flash'
 require 'spree/testing_support/url_helpers'
 require 'spree/testing_support/order_walkthrough'
 require 'spree/testing_support/caching'
-require 'spree/testing_support/shoulda_matcher_configuration'
-
-require 'paperclip/matchers'
-
-require 'capybara-screenshot/rspec'
-Capybara.save_path = ENV['CIRCLE_ARTIFACTS'] if ENV['CIRCLE_ARTIFACTS']
-
-if ENV['WEBDRIVER'] == 'accessible'
-  require 'capybara/accessible'
-  Capybara.javascript_driver = :accessible
-else
-  require 'capybara/poltergeist'
-  Capybara.javascript_driver = :poltergeist
-end
+require 'spree/testing_support/capybara_config'
+require 'spree/testing_support/image_helpers'
+require 'webdrivers'
 
 RSpec.configure do |config|
   config.color = true
+  config.default_formatter = 'doc'
   config.fail_fast = ENV['FAIL_FAST'] || false
-  config.fixture_path = File.join(File.expand_path(File.dirname(__FILE__)), "fixtures")
+  config.fixture_path = File.join(__dir__, 'fixtures')
   config.infer_spec_type_from_file_location!
   config.mock_with :rspec
   config.raise_errors_for_deprecations!
@@ -85,24 +76,18 @@ RSpec.configure do |config|
     DatabaseCleaner.clean
   end
 
-  config.before(:each) do
+  config.before do
     WebMock.disable!
-    if RSpec.current_example.metadata[:js]
-      DatabaseCleaner.strategy = :truncation
-    else
-      DatabaseCleaner.strategy = :transaction
-    end
+    DatabaseCleaner.strategy = if RSpec.current_example.metadata[:js]
+                                 :truncation
+                               else
+                                 :transaction
+                               end
     # TODO: Find out why open_transactions ever gets below 0
     # See issue #3428
-    if ApplicationRecord.connection.open_transactions < 0
-      ApplicationRecord.connection.increment_open_transactions
-    end
+    ApplicationRecord.connection.increment_open_transactions if ApplicationRecord.connection.open_transactions < 0
     DatabaseCleaner.start
     reset_spree_preferences
-  end
-
-  config.after(:each) do
-    DatabaseCleaner.clean
   end
 
   config.after(:each, type: :feature) do |example|
@@ -113,16 +98,28 @@ RSpec.configure do |config|
     end
   end
 
+  config.append_after do
+    DatabaseCleaner.clean
+  end
 
-  config.include FactoryGirl::Syntax::Methods
+  config.include FactoryBot::Syntax::Methods
 
   config.include Spree::TestingSupport::Preferences
   config.include Spree::TestingSupport::UrlHelpers
   config.include Spree::TestingSupport::ControllerRequests, type: :controller
   config.include Spree::TestingSupport::Flash
-
-  config.include Paperclip::Shoulda::Matchers
+  config.include Spree::TestingSupport::ImageHelpers
 
   config.order = :random
   Kernel.srand config.seed
+
+  config.verbose_retry = true
+  config.display_try_failure_messages = true
+
+  config.around :each, type: :feature do |ex|
+    ex.run_with_retry retry: 3
+  end
+
+  config.filter_run_including focus: true unless ENV['CI']
+  config.run_all_when_everything_filtered = true
 end

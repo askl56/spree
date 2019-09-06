@@ -21,12 +21,13 @@ module Spree
 
     belongs_to :tax_category, class_name: 'Spree::TaxCategory', optional: true
 
-    validates :name, presence: true
+    validates :name, :display_on, presence: true
 
     validate :at_least_one_shipping_category
 
     def include?(address)
       return false unless address
+
       zones.includes(:zone_members).any? do |zone|
         zone.include?(address)
       end
@@ -34,12 +35,13 @@ module Spree
 
     def build_tracking_url(tracking)
       return if tracking.blank? || tracking_url.blank?
+
       tracking_url.gsub(/:tracking/, ERB::Util.url_encode(tracking)) # :url_encode exists in 1.8.7 through 2.1.0
     end
 
     def self.calculators
-      spree_calculators.send(model_name_without_spree_namespace)
-        .select { |c| c.to_s.constantize < Spree::ShippingCalculator }
+      spree_calculators.send(model_name_without_spree_namespace).
+        select { |c| c.to_s.constantize < Spree::ShippingCalculator }
     end
 
     def tax_category
@@ -48,7 +50,7 @@ module Spree
 
     def available_to_display?(display_filter)
       (frontend? && display_filter == DISPLAY_ON_FRONT_END) ||
-      (backend? && display_filter == DISPLAY_ON_BACK_END)
+        (backend? && display_filter == DISPLAY_ON_BACK_END)
     end
 
     private

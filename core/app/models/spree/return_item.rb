@@ -151,8 +151,9 @@ module Spree
       # ever returned. This means that the inventory unit's line_item
       # will have a different variant than the inventory unit itself
       return unless exchange_required?
+
       exchange_inventory_units.build(variant: exchange_variant, line_item: inventory_unit.line_item,
-                                      order: inventory_unit.order, quantity: return_quantity)
+                                     order: inventory_unit.order, quantity: return_quantity)
     end
 
     def exchange_shipments
@@ -163,32 +164,32 @@ module Spree
       self.pre_tax_amount = refund_amount_calculator.new.compute(self)
     end
 
+    def currency
+      return_authorization.try(:currency) || Spree::Config[:currency]
+    end
+
     private
 
     def persist_acceptance_status_errors
-      self.update_attributes(acceptance_status_errors: validator.errors)
+      update(acceptance_status_errors: validator.errors)
     end
 
     def stock_item
       return unless customer_return
 
-      Spree::StockItem.find_by({
-        variant_id: inventory_unit.variant_id,
-        stock_location_id: customer_return.stock_location_id,
-      })
-    end
-
-    def currency
-      return_authorization.try(:currency) || Spree::Config[:currency]
+      Spree::StockItem.find_by(variant_id: inventory_unit.variant_id,
+                               stock_location_id: customer_return.stock_location_id)
     end
 
     def process_inventory_unit!
       inventory_unit.return!
-      Spree::StockMovement.create!(
-        stock_item_id: stock_item.id,
-        quantity: inventory_unit.quantity,
-        originator: return_authorization
-      ) if should_restock?
+      if should_restock?
+        Spree::StockMovement.create!(
+          stock_item_id: stock_item.id,
+          quantity: inventory_unit.quantity,
+          originator: return_authorization
+        )
+      end
     end
 
     # This logic is also present in the customer return. The reason for the
@@ -207,6 +208,7 @@ module Spree
 
     def eligible_exchange_variant
       return unless exchange_variant && exchange_variant_id_changed?
+
       unless eligible_exchange_variants.include?(exchange_variant)
         errors.add(:base, Spree.t(:invalid_exchange_variant))
       end
@@ -225,6 +227,7 @@ module Spree
     def sufficient_quantity_for_return
       # Only perform the check if everything is good so far
       return unless errors.empty? && return_quantity > inventory_unit.quantity
+
       errors.add(:return_quantity, Spree.t(:cannot_return_more_than_bought_quantity))
     end
 
@@ -237,16 +240,12 @@ module Spree
     end
 
     def validate_no_other_completed_return_items
-      other_return_item = Spree::ReturnItem.where({
-        inventory_unit_id: inventory_unit_id,
-        reception_status: COMPLETED_RECEPTION_STATUSES,
-      }).first
+      other_return_item = Spree::ReturnItem.where(inventory_unit_id: inventory_unit_id,
+                                                  reception_status: COMPLETED_RECEPTION_STATUSES).first
 
       if other_return_item
-        errors.add(:inventory_unit, :other_completed_return_item_exists, {
-          inventory_unit_id: inventory_unit_id,
-          return_item_id: other_return_item.id,
-        })
+        errors.add(:inventory_unit, :other_completed_return_item_exists,           inventory_unit_id: inventory_unit_id,
+                                                                                   return_item_id: other_return_item.id)
       end
     end
 

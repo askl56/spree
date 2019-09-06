@@ -3,11 +3,20 @@ Spree::Core::Engine.add_routes do
     resources :promotions do
       resources :promotion_rules
       resources :promotion_actions
+      member do
+        post :clone
+      end
     end
 
     resources :promotion_categories, except: [:show]
 
     resources :zones
+
+    resources :stores do
+      member do
+        post :set_default
+      end
+    end
 
     resources :countries do
       resources :states
@@ -45,7 +54,7 @@ Spree::Core::Engine.add_routes do
       end
     end
 
-    delete '/option_values/:id', to: "option_values#destroy", as: :option_value
+    delete '/option_values/:id', to: 'option_values#destroy', as: :option_value
 
     resources :properties do
       collection do
@@ -53,7 +62,7 @@ Spree::Core::Engine.add_routes do
       end
     end
 
-    delete '/product_properties/:id', to: "product_properties#destroy", as: :product_property
+    delete '/product_properties/:id', to: 'product_properties#destroy', as: :product_property
 
     resources :prototypes do
       member do
@@ -74,11 +83,13 @@ Spree::Core::Engine.add_routes do
         put :approve
         put :cancel
         put :resume
+        get :store
+        put :set_store
       end
 
       resources :state_changes, only: [:index]
 
-      resource :customer, controller: "orders/customer_details"
+      resource :customer, controller: 'orders/customer_details'
       resources :customer_returns, only: [:index, :new, :edit, :create, :update] do
         member do
           put :refund
@@ -107,8 +118,8 @@ Spree::Core::Engine.add_routes do
       end
     end
 
-    get '/return_authorizations', to: "return_index#return_authorizations", as: :return_authorizations
-    get '/customer_returns', to: "return_index#customer_returns", as: :customer_returns
+    get '/return_authorizations', to: 'return_index#return_authorizations', as: :return_authorizations
+    get '/customer_returns', to: 'return_index#customer_returns', as: :customer_returns
 
     resource :general_settings do
       collection do
@@ -151,7 +162,6 @@ Spree::Core::Engine.add_routes do
     resources :stock_items, only: [:create, :update, :destroy]
     resources :store_credit_categories
     resources :tax_rates
-    resources :trackers
     resources :payment_methods do
       collection do
         post :update_positions

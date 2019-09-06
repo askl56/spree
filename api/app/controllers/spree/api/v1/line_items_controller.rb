@@ -6,17 +6,15 @@ module Spree
 
         self.line_item_options = []
 
-        def new
-        end
+        def new; end
 
         def create
           variant = Spree::Variant.find(params[:line_item][:variant_id])
-          @line_item = order.contents.add(
-              variant,
-              params[:line_item][:quantity] || 1,
-              line_item_params[:options] || {}
-          )
 
+          @line_item = Spree::Dependencies.cart_add_item_service.constantize.call(order: order,
+                                                                                  variant: variant,
+                                                                                  quantity: params[:line_item][:quantity],
+                                                                                  options: line_item_params[:options]).value
           if @line_item.errors.empty?
             respond_with(@line_item, status: 201, default_template: :show)
           else
@@ -26,7 +24,8 @@ module Spree
 
         def update
           @line_item = find_line_item
-          if @order.contents.update_cart(line_items_attributes)
+
+          if Spree::Dependencies.cart_update_service.constantize.call(order: @order, params: line_items_attributes).success?
             @line_item.reload
             respond_with(@line_item, default_template: :show)
           else
@@ -36,37 +35,35 @@ module Spree
 
         def destroy
           @line_item = find_line_item
-          @order.contents.remove_line_item(@line_item)
+          Spree::Dependencies.cart_remove_line_item_service.constantize.call(order: @order, line_item: @line_item)
+
           respond_with(@line_item, status: 204)
         end
 
         private
-          def order
-            @order ||= Spree::Order.includes(:line_items).find_by!(number: order_id)
-            authorize! :update, @order, order_token
-          end
 
-          def find_line_item
-            id = params[:id].to_i
-            order.line_items.detect { |line_item| line_item.id == id } or
-                raise ActiveRecord::RecordNotFound
-          end
+        def order
+          @order ||= Spree::Order.includes(:line_items).find_by!(number: order_id)
+          authorize! :update, @order, order_token
+        end
 
-          def line_items_attributes
-            {line_items_attributes: {
-                id: params[:id],
-                quantity: params[:line_item][:quantity],
-                options: line_item_params[:options] || {}
-            }}
-          end
+        def find_line_item
+          id = params[:id].to_i
+          order.line_items.detect { |line_item| line_item.id == id } or
+            raise ActiveRecord::RecordNotFound
+        end
 
-          def line_item_params
-            params.require(:line_item).permit(
-                :quantity,
-                :variant_id,
-                options: line_item_options
-            )
-          end
+        def line_items_attributes
+          { line_items_attributes: {
+            id: params[:id],
+            quantity: params[:line_item][:quantity],
+            options: line_item_params[:options] || {}
+          } }
+        end
+
+        def line_item_params
+          params.require(:line_item).permit(:quantity, :variant_id, options: line_item_options)
+        end
       end
     end
   end

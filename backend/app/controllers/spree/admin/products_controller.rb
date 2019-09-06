@@ -26,7 +26,7 @@ module Spree
           params[:product][:option_type_ids] = params[:product][:option_type_ids].split(',')
         end
         invoke_callbacks(:update, :before)
-        if @object.update_attributes(permitted_resource_params)
+        if @object.update(permitted_resource_params)
           invoke_callbacks(:update, :after)
           flash[:success] = flash_message_for(@object, :successfully_updated)
           respond_with(@object) do |format|
@@ -50,39 +50,38 @@ module Spree
           if @product.destroy
             flash[:success] = Spree.t('notice_messages.product_deleted')
           else
-            flash[:error] = Spree.t('notice_messages.product_not_deleted')
+            flash[:error] = Spree.t('notice_messages.product_not_deleted', error: @product.errors.full_messages.to_sentence)
           end
         rescue ActiveRecord::RecordNotDestroyed => e
-          flash[:error] = Spree.t('notice_messages.product_not_deleted')
+          flash[:error] = Spree.t('notice_messages.product_not_deleted', error: e.message)
         end
 
         respond_with(@product) do |format|
           format.html { redirect_to collection_url }
-          format.js  { render_js_for_destroy }
+          format.js { render_js_for_destroy }
         end
       end
 
       def clone
         @new = @product.duplicate
 
-        if @new.save
+        if @new.persisted?
           flash[:success] = Spree.t('notice_messages.product_cloned')
+          redirect_to edit_admin_product_url(@new)
         else
-          flash[:error] = Spree.t('notice_messages.product_not_cloned')
+          flash[:error] = Spree.t('notice_messages.product_not_cloned', error: @new.errors.full_messages.to_sentence)
+          redirect_to admin_products_url
         end
-
-        redirect_to edit_admin_product_url(@new)
-
-      rescue ActiveRecord::RecordInvalid
+      rescue ActiveRecord::RecordInvalid => e
         # Handle error on uniqueness validation on product fields
-        flash[:error] = Spree.t('notice_messages.product_not_cloned')
+        flash[:error] = Spree.t('notice_messages.product_not_cloned', error: e.message)
         redirect_to admin_products_url
       end
 
       def stock
         @variants = @product.variants.includes(*variant_stock_includes)
         @variants = [@product.master] if @variants.empty?
-        @stock_locations = StockLocation.accessible_by(current_ability, :read)
+        @stock_locations = StockLocation.accessible_by(current_ability)
         if @stock_locations.empty?
           flash[:error] = Spree.t(:stock_management_requires_a_stock_location)
           redirect_to admin_stock_locations_path
@@ -108,11 +107,12 @@ module Spree
 
       def collection
         return @collection if @collection.present?
-        params[:q] ||= {}
-        params[:q][:deleted_at_null] ||= "1"
-        params[:q][:not_discontinued] ||= "1"
 
-        params[:q][:s] ||= "name asc"
+        params[:q] ||= {}
+        params[:q][:deleted_at_null] ||= '1'
+        params[:q][:not_discontinued] ||= '1'
+
+        params[:q][:s] ||= 'name asc'
         @collection = super
         # Don't delete params[:q][:deleted_at_null] here because it is used in view to check the
         # checkbox for 'q[deleted_at_null]'. This also messed with pagination when deleted_at_null is checked.
@@ -124,15 +124,15 @@ module Spree
         # This is to include all products and not just deleted products.
         @search = @collection.ransack(params[:q].reject { |k, _v| k.to_s == 'deleted_at_null' })
         @collection = @search.result.
-              distinct_by_product_ids(params[:q][:s]).
-              includes(product_includes).
-              page(params[:page]).
-              per(params[:per_page] || Spree::Config[:admin_products_per_page])
+                      includes(product_includes).
+                      page(params[:page]).
+                      per(params[:per_page] || Spree::Config[:admin_products_per_page])
         @collection
       end
 
       def create_before
         return if params[:product][:prototype_id].blank?
+
         @prototype = Spree::Prototype.find(params[:product][:prototype_id])
       end
 
@@ -140,6 +140,7 @@ module Spree
         # note: we only reset the product properties if we're receiving a post
         #       from the form on that tab
         return unless params[:clear_product_properties]
+
         params[:product] ||= {}
       end
 

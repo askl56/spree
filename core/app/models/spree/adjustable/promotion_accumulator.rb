@@ -16,12 +16,15 @@ module Spree
 
       def initialize(adjustable)
         @adjustable = adjustable
-        @adjustments, @sources, @promotions = [], [], []
+        @adjustments = []
+        @sources = []
+        @promotions = []
         all_adjustments.each { |a| add_adjustment(a) }
       end
 
       def add_adjustment(adjustment, opts = {})
         return unless adjustment.promotion?
+
         source = opts[:source] || adjustment.source
         promotion = opts[:promotion] || source.promotion
 
@@ -30,7 +33,7 @@ module Spree
         add(promotions, promotion, source.promotion_id)
       end
 
-      def promotions_adjustments(promotion_id, adjustments = adjustments())
+      def promotions_adjustments(promotion_id, adjustments = self.adjustments)
         where(sources, promotion_id: promotion_id).map do |source|
           where(adjustments, source_id: source.id)
         end.flatten
@@ -56,7 +59,7 @@ module Spree
 
       def all_adjustments
         order.all_adjustments.promotion.includes(source: [:promotion]).where.
-          not("adjustable_id = ? AND adjustable_type = ?", adjustable.id, adjustable.class.to_s)
+          not('adjustable_id = ? AND adjustable_type = ?', adjustable.id, adjustable.class.to_s)
       end
 
       def add(array, object, id)
@@ -64,7 +67,7 @@ module Spree
       end
 
       def item_adjustments
-        adjustments.select { |a| a.adjustable_type != 'Spree::Shipment' }
+        adjustments.reject { |a| a.adjustable_type == 'Spree::Shipment' }
       end
 
       def where(array, opts = {})

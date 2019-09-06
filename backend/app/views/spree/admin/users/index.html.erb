@@ -14,26 +14,26 @@
   <div data-hook="admin_users_index_search">
     <%= search_form_for [:admin, @search], url: spree.admin_users_url do |f| %>
       <div class="form-group">
-        <%= f.label Spree.t(:email) %>
-        <%= f.text_field :email_cont, class: "form-control js-quick-search-target" %>
+        <%= f.label :email_cont, Spree.t(:email) %>
+        <%= f.text_field :email_cont, class: "form-control js-quick-search-target js-filterable" %>
       </div>
       <div class="row">
-        <div class="col-xs-12 col-md-6">
+        <div class="col-12 col-lg-6">
           <div class="form-group">
-            <%= f.label Spree.t(:first_name) %>
-            <%= f.text_field :bill_address_firstname_cont, class: 'form-control' %>
+            <%= f.label :bill_address_firstname_cont, Spree.t(:first_name) %>
+            <%= f.text_field :bill_address_firstname_cont, class: 'form-control js-filterable' %>
           </div>
         </div>
-        <div class="col-xs-12 col-md-6">
+        <div class="col-12 col-lg-6">
           <div class="form-group">
-            <%= f.label Spree.t(:last_name) %>
-            <%= f.text_field :bill_address_lastname_cont, class: 'form-control' %>
+            <%= f.label :bill_address_lastname_cont, Spree.t(:last_name) %>
+            <%= f.text_field :bill_address_lastname_cont, class: 'form-control js-filterable' %>
           </div>
         </div>
       </div>
       <div class="form-group">
-        <%= f.label Spree.t(:company) %>
-        <%= f.text_field :bill_address_company_cont, class: 'form-control' %>
+        <%= f.label :bill_address_company_cont, Spree.t(:company) %>
+        <%= f.text_field :bill_address_company_cont, class: 'form-control js-filterable' %>
       </div>
       <div data-hook="admin_users_index_search_buttons" class="form-actions">
         <%= button Spree.t(:search), 'search' %>
@@ -66,9 +66,9 @@
   </table>
 <% else %>
   <div class="alert alert-info no-objects-found">
-    <%= Spree.t(:no_resource_found, resource: plural_resource_name(Spree::User)) %>,
+    <%= Spree.t(:no_resource_found, resource: plural_resource_name(Spree.user_class)) %>,
     <%= link_to Spree.t(:add_one), new_object_url %>!
   </div>
 <% end %>
 
-<%= paginate @users %>
+<%= paginate @users, theme: 'twitter-bootstrap-4' %>

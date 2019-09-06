@@ -4,6 +4,9 @@ module Spree
   # checkout which has nothing to do with updating an order that this approach
   # is waranted.
   class CheckoutController < Spree::StoreController
+    include Spree::Checkout::AddressBook
+
+    before_action :set_cache_header, only: [:edit]
     before_action :load_order_with_lock
     before_action :ensure_valid_state_lock_version, only: [:update]
     before_action :set_state_if_present
@@ -53,7 +56,7 @@ module Spree
     end
 
     def insufficient_payment?
-      params[:state] == "confirm" &&
+      params[:state] == 'confirm' &&
         @order.payment_required? &&
         @order.payments.valid.sum(:amount) != @order.total
     end
@@ -89,29 +92,27 @@ module Spree
 
     def ensure_valid_state_lock_version
       if params[:order] && params[:order][:state_lock_version]
-        @order.with_lock do
+        changes = @order.changes if @order.changed?
+        @order.reload.with_lock do
           unless @order.state_lock_version == params[:order].delete(:state_lock_version).to_i
             flash[:error] = Spree.t(:order_already_updated)
             redirect_to(checkout_state_path(@order.state)) && return
           end
           @order.increment!(:state_lock_version)
         end
+        @order.assign_attributes(changes) if changes
       end
     end
 
     def set_state_if_present
       if params[:state]
-        if @order.can_go_to_state?(params[:state]) && !skip_state_validation?
-          redirect_to checkout_state_path(@order.state)
-        end
+        redirect_to checkout_state_path(@order.state) if @order.can_go_to_state?(params[:state]) && !skip_state_validation?
         @order.state = params[:state]
       end
     end
 
     def ensure_checkout_allowed
-      unless @order.checkout_allowed?
-        redirect_to spree.cart_path
-      end
+      redirect_to spree.cart_path unless @order.checkout_allowed?
     end
 
     def ensure_order_not_completed
@@ -150,22 +151,20 @@ module Spree
     end
 
     def before_payment
-      if @order.checkout_steps.include? "delivery"
+      if @order.checkout_steps.include? 'delivery'
         packages = @order.shipments.map(&:to_package)
         @differentiator = Spree::Stock::Differentiator.new(@order, packages)
         @differentiator.missing.each do |variant, quantity|
-          @order.contents.remove(variant, quantity)
+          Spree::Dependencies.cart_remove_item_service.constantize.call(order: @order, variant: variant, quantity: quantity)
         end
       end
 
-      if try_spree_current_user && try_spree_current_user.respond_to?(:payment_sources)
-        @payment_sources = try_spree_current_user.payment_sources
-      end
+      @payment_sources = try_spree_current_user.payment_sources if try_spree_current_user&.respond_to?(:payment_sources)
     end
 
     def add_store_credit_payments
-      if params.has_key?(:apply_store_credit)
-        @order.add_store_credit_payments
+      if params.key?(:apply_store_credit)
+        add_store_credit_service.call(order: @order)
 
         # Remove other payment method parameters.
         params[:order].delete(:payments_attributes)
@@ -173,15 +172,13 @@ module Spree
         params.delete(:payment_source)
 
         # Return to the Payments page if additional payment is needed.
-        if @order.payments.valid.sum(:amount) < @order.total
-          redirect_to checkout_state_path(@order.state) and return
-        end
+        redirect_to checkout_state_path(@order.state) and return if @order.payments.valid.sum(:amount) < @order.total
       end
     end
 
     def remove_store_credit_payments
       if params.key?(:remove_store_credit)
-        @order.remove_store_credit_payments
+        remove_store_credit_service.call(order: @order)
         redirect_to checkout_state_path(@order.state) and return
       end
     end
@@ -193,7 +190,19 @@ module Spree
     end
 
     def check_authorization
-      authorize!(:edit, current_order, cookies.signed[:guest_token])
+      authorize!(:edit, current_order, cookies.signed[:token])
+    end
+
+    def set_cache_header
+      response.headers['Cache-Control'] = 'no-store'
+    end
+
+    def add_store_credit_service
+      Spree::Dependencies.checkout_add_store_credit_service.constantize
+    end
+
+    def remove_store_credit_service
+      Spree::Dependencies.checkout_remove_store_credit_service.constantize
     end
   end
 end

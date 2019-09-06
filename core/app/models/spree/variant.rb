@@ -6,9 +6,8 @@ module Spree
     belongs_to :product, touch: true, class_name: 'Spree::Product', inverse_of: :variants
     belongs_to :tax_category, class_name: 'Spree::TaxCategory', optional: true
 
-    delegate_belongs_to :product, :name, :description, :slug, :available_on,
-                        :shipping_category_id, :meta_description, :meta_keywords,
-                        :shipping_category
+    delegate :name, :name=, :description, :slug, :available_on, :shipping_category_id,
+             :meta_description, :meta_keywords, :shipping_category, to: :product
 
     # we need to have this callback before any dependent: :destroy associations
     # https://github.com/rails/rails/issues/3458
@@ -32,12 +31,12 @@ module Spree
     has_many :option_value_variants, class_name: 'Spree::OptionValueVariant'
     has_many :option_values, through: :option_value_variants, class_name: 'Spree::OptionValue'
 
-    has_many :images, -> { order(:position) }, as: :viewable, dependent: :destroy, class_name: "Spree::Image"
+    has_many :images, -> { order(:position) }, as: :viewable, dependent: :destroy, class_name: 'Spree::Image'
 
     has_many :prices,
-      class_name: 'Spree::Price',
-      dependent: :destroy,
-      inverse_of: :variant
+             class_name: 'Spree::Price',
+             dependent: :destroy,
+             inverse_of: :variant
 
     before_validation :set_cost_currency
 
@@ -49,7 +48,7 @@ module Spree
       validates :cost_price
       validates :price
     end
-    validates :sku, uniqueness: { conditions: -> { where(deleted_at: nil) } }, allow_blank: true
+    validates :sku, uniqueness: { conditions: -> { where(deleted_at: nil) }, case_sensitive: false }, allow_blank: true
 
     after_create :create_stock_items
     after_create :set_master_out_of_stock, unless: :is_master?
@@ -57,6 +56,22 @@ module Spree
     after_touch :clear_in_stock_cache
 
     scope :in_stock, -> { joins(:stock_items).where('count_on_hand > ? OR track_inventory = ?', 0, false) }
+    scope :backorderable, -> { joins(:stock_items).where(spree_stock_items: { backorderable: true }) }
+    scope :in_stock_or_backorderable, -> { in_stock.or(backorderable) }
+
+    scope :eligible, -> {
+      where(is_master: false).or(
+        where(
+          <<-SQL
+            #{Variant.quoted_table_name}.id IN (
+              SELECT MIN(#{Variant.quoted_table_name}.id) FROM #{Variant.quoted_table_name}
+              GROUP BY #{Variant.quoted_table_name}.product_id
+              HAVING COUNT(*) = 1
+            )
+          SQL
+        )
+      )
+    }
 
     scope :not_discontinued, -> do
       where(
@@ -66,18 +81,17 @@ module Spree
       )
     end
 
-    scope :not_deleted, -> { where("#{Variant.quoted_table_name}.deleted_at IS NULL") }
+    scope :not_deleted, -> { where("#{Spree::Variant.quoted_table_name}.deleted_at IS NULL") }
 
-    scope :for_currency_and_available_price_amount, -> (currency) do
+    scope :for_currency_and_available_price_amount, ->(currency = nil) do
       currency ||= Spree::Config[:currency]
-      joins(:prices).where("spree_prices.currency = ?", currency).where("spree_prices.amount IS NOT NULL").distinct
+      joins(:prices).where('spree_prices.currency = ?', currency).where('spree_prices.amount IS NOT NULL').distinct
     end
 
-    scope :active, -> (currency = nil) do
+    scope :active, ->(currency = nil) do
       not_discontinued.not_deleted.
         for_currency_and_available_price_amount(currency)
     end
-
     LOCALIZED_NUMBERS = %w(cost_price weight depth width height)
 
     LOCALIZED_NUMBERS.each do |m|
@@ -93,25 +107,16 @@ module Spree
       !discontinued? && product.available?
     end
 
-    def self.having_orders
-      joins(:line_items).distinct
-    end
-
     def tax_category
       if self[:tax_category_id].nil?
         product.tax_category
       else
-        TaxCategory.find(self[:tax_category_id])
+        Spree::TaxCategory.find(self[:tax_category_id])
       end
     end
 
-    # returns number of units currently on backorder for this variant.
-    def on_backorder
-      inventory_units.with_state('backordered').size
-    end
-
     def options_text
-      values = self.option_values.sort do |a, b|
+      values = option_values.sort do |a, b|
         a.option_type.position <=> b.option_type.position
       end
 
@@ -119,7 +124,7 @@ module Spree
         "#{ov.option_type.presentation}: #{ov.presentation}"
       end
 
-      values.to_sentence({ words_connector: ", ", two_words_connector: ", " })
+      values.to_sentence(words_connector: ', ', two_words_connector: ', ')
     end
 
     # Default to master name
@@ -153,23 +158,24 @@ module Spree
 
     def set_option_value(opt_name, opt_value)
       # no option values on master
-      return if self.is_master
+      return if is_master
 
       option_type = Spree::OptionType.where(name: opt_name).first_or_initialize do |o|
         o.presentation = opt_name
         o.save!
       end
 
-      current_value = self.option_values.detect { |o| o.option_type.name == opt_name }
+      current_value = option_values.detect { |o| o.option_type.name == opt_name }
 
-      unless current_value.nil?
-        return if current_value.name == opt_value
-        self.option_values.delete(current_value)
-      else
+      if current_value.nil?
         # then we have to check to make sure that the product has the option type
-        unless self.product.option_types.include? option_type
-          self.product.option_types << option_type
+        unless product.option_types.include? option_type
+          product.option_types << option_type
         end
+      else
+        return if current_value.name == opt_value
+
+        option_values.delete(current_value)
       end
 
       option_value = Spree::OptionValue.where(option_type_id: option_type.id, name: opt_value).first_or_initialize do |o|
@@ -177,12 +183,12 @@ module Spree
         o.save!
       end
 
-      self.option_values << option_value
-      self.save
+      option_values << option_value
+      save
     end
 
     def option_value(opt_name)
-      self.option_values.detect { |o| o.option_type.name == opt_name }.try(:presentation)
+      option_values.detect { |o| o.option_type.name == opt_name }.try(:presentation)
     end
 
     def price_in(currency)
@@ -196,27 +202,27 @@ module Spree
     def price_modifier_amount_in(currency, options = {})
       return 0 unless options.present?
 
-      options.keys.map { |key|
+      options.keys.map do |key|
         m = "#{key}_price_modifier_amount_in".to_sym
-        if self.respond_to? m
-          self.send(m, currency, options[key])
+        if respond_to? m
+          send(m, currency, options[key])
         else
           0
         end
-      }.sum
+      end.sum
     end
 
     def price_modifier_amount(options = {})
       return 0 unless options.present?
 
-      options.keys.map { |key|
+      options.keys.map do |key|
         m = "#{key}_price_modifier_amount".to_sym
-        if self.respond_to? m
-          self.send(m, options[key])
+        if respond_to? m
+          send(m, options[key])
         else
           0
         end
-      }.sum
+      end.sum
     end
 
     def name_and_sku
@@ -237,14 +243,18 @@ module Spree
 
     alias is_backorderable? backorderable?
 
+    def purchasable?
+      in_stock? || backorderable?
+    end
+
     # Shortcut method to determine if inventory tracking is enabled for this variant
     # This considers both variant tracking flag and site-wide inventory tracking settings
     def should_track_inventory?
-      self.track_inventory? && Spree::Config.track_inventory_levels
+      track_inventory? && Spree::Config.track_inventory_levels
     end
 
     def track_inventory
-      self.should_track_inventory?
+      should_track_inventory?
     end
 
     def volume
@@ -263,11 +273,15 @@ module Spree
       !!discontinue_on && discontinue_on <= Time.current
     end
 
+    def backordered?
+      total_on_hand <= 0 && stock_items.exists?(backorderable: true)
+    end
+
     private
 
     def ensure_no_line_items
       if line_items.any?
-        errors.add(:base, Spree.t(:cannot_destroy_if_attached_to_line_items))
+        errors.add(:base, :cannot_destroy_if_attached_to_line_items)
         throw(:abort)
       end
     end
@@ -277,7 +291,7 @@ module Spree
     end
 
     def set_master_out_of_stock
-      if product.master && product.master.in_stock?
+      if product.master&.in_stock?
         product.master.stock_items.update_all(backorderable: false)
         product.master.stock_items.each(&:reduce_count_on_hand_to_zero)
       end
@@ -286,8 +300,9 @@ module Spree
     # Ensures a new variant takes the product master price when price is not supplied
     def check_price
       if price.nil? && Spree::Config[:require_master_price]
-        raise 'No master variant found to infer price' unless product && product.master
-        raise 'Must supply price for variant or master.price for product.' if self == product.master
+        return errors.add(:base, :no_master_variant_found_to_infer_price)  unless product&.master
+        return errors.add(:base, :must_supply_price_for_variant_or_master) if self == product.master
+
         self.price = product.master.price
       end
       if price.present? && currency.nil?

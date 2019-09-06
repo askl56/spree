@@ -29,9 +29,9 @@ module Spree
     def find_matching_line_item(other_order_line_item)
       order.line_items.detect do |my_li|
         my_li.variant == other_order_line_item.variant &&
-          order.line_item_comparison_hooks.all? do |hook|
-            order.send(hook, my_li, other_order_line_item.serializable_hash)
-          end
+          Spree::Dependencies.cart_compare_line_items_service.constantize.new.call(order: order,
+                                                                                   line_item: my_li,
+                                                                                   options: other_order_line_item.serializable_hash).value
       end
     end
 
@@ -47,6 +47,7 @@ module Spree
         handle_error(current_line_item) unless current_line_item.save
       else
         other_order_line_item.order_id = order.id
+        other_order_line_item.adjustments.update_all(order_id: order.id)
         handle_error(other_order_line_item) unless other_order_line_item.save
       end
     end

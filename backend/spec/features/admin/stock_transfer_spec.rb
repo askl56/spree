@@ -20,8 +20,9 @@ describe 'Stock Transfers', type: :feature, js: true do
   end
 
   it 'transfer between 2 locations' do
-    source_location = create(:stock_location_with_items, name: 'NY')
-    destination_location = create(:stock_location, name: 'SF')
+    create(:stock_location_with_items, name: 'NY') # source_location
+    create(:stock_location, name: 'SF') # destination_location
+
     variant = Spree::Variant.last
 
     visit spree.admin_stock_transfers_path
@@ -45,8 +46,8 @@ describe 'Stock Transfers', type: :feature, js: true do
   describe 'received stock transfer' do
     def it_is_received_stock_transfer(page)
       expect(page).to have_content('Reference PO 666')
-      expect(page).not_to have_selector("#stock-location-source")
-      expect(page).to have_selector("#stock-location-destination")
+      expect(page).not_to have_selector('#stock-location-source')
+      expect(page).to have_selector('#stock-location-destination')
 
       transfer = Spree::StockTransfer.last
       expect(transfer.stock_movements.size).to eq 1
@@ -54,8 +55,9 @@ describe 'Stock Transfers', type: :feature, js: true do
     end
 
     it 'receive stock to a single location' do
-      source_location = create(:stock_location_with_items, name: 'NY')
-      destination_location = create(:stock_location, name: 'SF')
+      create(:stock_location_with_items, name: 'NY') # source_location
+      create(:stock_location, name: 'SF') # destination_location
+
       variant = Spree::Variant.last
 
       visit spree.new_admin_stock_transfer_path
@@ -72,7 +74,7 @@ describe 'Stock Transfers', type: :feature, js: true do
     end
 
     it 'forced to only receive there is only one location' do
-      source_location = create(:stock_location_with_items, name: 'NY')
+      create(:stock_location_with_items, name: 'NY') # source_location
       variant = Spree::Variant.last
 
       visit spree.new_admin_stock_transfer_path

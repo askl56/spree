@@ -1,14 +1,13 @@
 module Spree
   module BaseHelper
-
     def available_countries
-      checkout_zone = Zone.find_by(name: Spree::Config[:checkout_zone])
+      checkout_zone = Spree::Zone.find_by(name: Spree::Config[:checkout_zone])
 
-      if checkout_zone && checkout_zone.kind == 'country'
-        countries = checkout_zone.country_list
-      else
-        countries = Country.all
-      end
+      countries = if checkout_zone && checkout_zone.kind == 'country'
+                    checkout_zone.country_list
+                  else
+                    Spree::Country.all
+                  end
 
       countries.collect do |country|
         country.name = Spree.t(country.iso, scope: 'country_names', default: country.name)
@@ -33,27 +32,27 @@ module Spree
       end
     end
 
-    def logo(image_path=Spree::Config[:logo])
-      link_to image_tag(image_path), spree.root_path
+    def logo(image_path = Spree::Config[:logo])
+      link_to image_tag(image_path), spree.respond_to?(:root_path) ? spree.root_path : main_app.root_path
     end
 
     def meta_data
-      object = instance_variable_get('@'+controller_name.singularize)
+      object = instance_variable_get('@' + controller_name.singularize)
       meta = {}
 
-      if object.kind_of? ApplicationRecord
+      if object.is_a? ApplicationRecord
         meta[:keywords] = object.meta_keywords if object[:meta_keywords].present?
         meta[:description] = object.meta_description if object[:meta_description].present?
       end
 
-      if meta[:description].blank? && object.kind_of?(Spree::Product)
+      if meta[:description].blank? && object.is_a?(Spree::Product)
         meta[:description] = truncate(strip_tags(object.description), length: 160, separator: ' ')
       end
 
-      meta.reverse_merge!({
-        keywords: current_store.meta_keywords,
-        description: current_store.meta_description,
-      }) if meta[:keywords].blank? or meta[:description].blank?
+      if meta[:keywords].blank? || meta[:description].blank?
+        meta.reverse_merge!(keywords: current_store.meta_keywords,
+                            description: current_store.meta_description)
+      end
       meta
     end
 
@@ -66,30 +65,29 @@ module Spree
     def method_missing(method_name, *args, &block)
       if image_style = image_style_from_method_name(method_name)
         define_image_method(image_style)
-        self.send(method_name, *args)
+        send(method_name, *args)
       else
         super
       end
     end
 
     def pretty_time(time)
-      [I18n.l(time.to_date, format: :long), time.strftime("%l:%M %p")].join(" ")
+      [I18n.l(time.to_date, format: :long), time.strftime('%l:%M %p')].join(' ')
     end
 
     def seo_url(taxon)
-      return spree.nested_taxons_path(taxon.permalink)
+      spree.nested_taxons_path(taxon.permalink)
     end
 
-    # human readable list of variant options
-    def variant_options(v, options={})
-      v.options_text
+    def frontend_available?
+      Spree::Core::Engine.frontend_available?
     end
 
     private
 
     def create_product_image_tag(image, product, options, style)
-      options.reverse_merge! alt: image.alt.blank? ? product.name : image.alt
-      image_tag image.attachment.url(style), options
+      options[:alt] = image.alt.blank? ? product.name : image.alt
+      image_tag main_app.url_for(image.url(style)), options
     end
 
     def define_image_method(style)
@@ -115,8 +113,7 @@ module Spree
     # Returns style of image or nil
     def image_style_from_method_name(method_name)
       if method_name.to_s.match(/_image$/) && style = method_name.to_s.sub(/_image$/, '')
-        possible_styles = Spree::Image.attachment_definitions[:attachment][:styles]
-        style if style.in? possible_styles.with_indifferent_access
+        style if style.in? Spree::Image.styles.with_indifferent_access
       end
     end
   end

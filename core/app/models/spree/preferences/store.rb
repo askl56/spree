@@ -6,8 +6,15 @@
 
 require 'singleton'
 
-module Spree::Preferences
+DB_EXCEPTIONS = if defined? PG
+                  [PG::ConnectionBad, ActiveRecord::NoDatabaseError]
+                elsif defined? Mysql2
+                  [Mysql2::Error::ConnectionError, ActiveRecord::NoDatabaseError]
+                else
+                  [ActiveRecord::ConnectionNotEstablished, ActiveRecord::NoDatabaseError]
+                end
 
+module Spree::Preferences
   class StoreInstance
     attr_accessor :persistence
 
@@ -20,11 +27,11 @@ module Spree::Preferences
       @cache.write(key, value)
       persist(key, value)
     end
-    alias_method :[]=, :set
+    alias []= set
 
     def exist?(key)
       @cache.exist?(key) ||
-      should_persist? && Spree::Preference.where(key: key).exists?
+        should_persist? && Spree::Preference.where(key: key).exists?
     end
 
     def get(key)
@@ -40,13 +47,13 @@ module Spree::Preferences
         # has been cleared from the cache
 
         # does it exist in the database?
-        if preference = Spree::Preference.find_by_key(key)
-          # it does exist
-          val = preference.value
-        else
-          # use the fallback value
-          val = yield
-        end
+        val = if preference = Spree::Preference.find_by(key: key)
+                # it does exist
+                preference.value
+              else
+                # use the fallback value
+                yield
+              end
 
         # Cache either the value from the db or the fallback value.
         # This avoids hitting the db with subsequent queries.
@@ -57,7 +64,7 @@ module Spree::Preferences
         yield
       end
     end
-    alias_method :fetch, :get
+    alias fetch get
 
     def delete(key)
       @cache.delete(key)
@@ -81,18 +88,18 @@ module Spree::Preferences
     def destroy(cache_key)
       return unless should_persist?
 
-      preference = Spree::Preference.find_by_key(cache_key)
-      preference.destroy if preference
+      preference = Spree::Preference.find_by(key: cache_key)
+      preference&.destroy
     end
 
     def should_persist?
-      @persistence and Spree::Preference.table_exists?
+      @persistence && Spree::Preference.table_exists?
+    rescue *DB_EXCEPTIONS # this is fix to make Deploy To Heroku button work
+      false
     end
-
   end
 
   class Store < StoreInstance
     include Singleton
   end
-
 end

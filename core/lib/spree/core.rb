@@ -7,8 +7,8 @@ require 'friendly_id'
 require 'kaminari'
 require 'mail'
 require 'monetize'
-require 'paperclip'
 require 'paranoia'
+require 'mini_magick'
 require 'premailer/rails'
 require 'ransack'
 require 'responders'
@@ -19,14 +19,13 @@ require 'state_machines-activerecord'
 StateMachines::Machine.ignore_method_conflicts = true
 
 module Spree
-
   mattr_accessor :user_class
 
-  def self.user_class
+  def self.user_class(constantize: true)
     if @@user_class.is_a?(Class)
-      raise "Spree.user_class MUST be a String or Symbol object, not a Class object."
+      raise 'Spree.user_class MUST be a String or Symbol object, not a Class object.'
     elsif @@user_class.is_a?(String) || @@user_class.is_a?(Symbol)
-      @@user_class.to_s.constantize
+      constantize ? @@user_class.to_s.constantize : @@user_class.to_s
     end
   end
 
@@ -55,13 +54,27 @@ module Spree
   #
   # This method is defined within the core gem on purpose.
   # Some people may only wish to use the Core part of Spree.
-  def self.config(&block)
+  def self.config
     yield(Spree::Config)
   end
 
+  # Used to set dependencies for Spree.
+  #
+  # Example:
+  #
+  #   Spree.dependencies do |dependency|
+  #     dependency.cart_add_item_service = MyCustomAddToCart
+  #   end
+  #
+  # This method is defined within the core gem on purpose.
+  # Some people may only wish to use the Core part of Spree.
+  def self.dependencies
+    yield(Spree::Dependencies)
+  end
+
   module Core
-    autoload :ProductFilters, "spree/core/product_filters"
-    autoload :TokenGenerator, "spree/core/token_generator"
+    autoload :ProductFilters, 'spree/core/product_filters'
+    autoload :TokenGenerator, 'spree/core/token_generator'
 
     class GatewayError < RuntimeError; end
     class DestroyWithOrdersError < StandardError; end
@@ -70,11 +83,7 @@ end
 
 require 'spree/core/version'
 
-require 'spree/core/environment_extension'
-require 'spree/core/environment/calculators'
-require 'spree/core/environment'
 require 'spree/core/number_generator'
-require 'spree/promo/environment'
 require 'spree/migrations'
 require 'spree/core/engine'
 
@@ -82,14 +91,15 @@ require 'spree/i18n'
 require 'spree/localized_number'
 require 'spree/money'
 require 'spree/permitted_attributes'
+require 'spree/service_module'
+require 'spree/dependencies_helper'
 
-require 'spree/core/delegate_belongs_to'
 require 'spree/core/importer'
+require 'spree/core/query_filters'
 require 'spree/core/product_duplicator'
 require 'spree/core/controller_helpers/auth'
 require 'spree/core/controller_helpers/common'
 require 'spree/core/controller_helpers/order'
-require 'spree/core/controller_helpers/respond_with'
 require 'spree/core/controller_helpers/search'
 require 'spree/core/controller_helpers/store'
 require 'spree/core/controller_helpers/strong_parameters'

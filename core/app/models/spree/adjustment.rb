@@ -48,12 +48,12 @@ module Spree
 
     self.competing_promos_source_types = ['Spree::PromotionAction']
 
-    scope :open, -> { where(state: 'open') }
-    scope :closed, -> { where(state: 'closed') }
+    scope :not_finalized, -> { where(state: 'open') }
+    scope :finalized, -> { where(state: 'closed') }
     scope :tax, -> { where(source_type: 'Spree::TaxRate') }
     scope :non_tax, -> do
       source_type = arel_table[:source_type]
-      where(source_type.not_eq('Spree::TaxRate').or source_type.eq(nil))
+      where(source_type.not_eq('Spree::TaxRate').or(source_type.eq(nil)))
     end
     scope :price, -> { where(adjustable_type: 'Spree::LineItem') }
     scope :shipping, -> { where(adjustable_type: 'Spree::Shipment') }
@@ -63,7 +63,7 @@ module Spree
     scope :credit, -> { where("#{quoted_table_name}.amount < 0") }
     scope :nonzero, -> { where("#{quoted_table_name}.amount != 0") }
     scope :promotion, -> { where(source_type: 'Spree::PromotionAction') }
-    scope :return_authorization, -> { where(source_type: "Spree::ReturnAuthorization") }
+    scope :return_authorization, -> { where(source_type: 'Spree::ReturnAuthorization') }
     scope :is_included, -> { where(included: true) }
     scope :additional, -> { where(included: false) }
     scope :competing_promos, -> { where(source_type: competing_promos_source_types) }
@@ -73,8 +73,12 @@ module Spree
     extend DisplayMoney
     money_methods :amount
 
+    def amount=(amount)
+      self[:amount] = Spree::LocalizedNumber.parse(amount)
+    end
+
     def currency
-      adjustable ? adjustable.currency : Spree::Config[:currency]
+      adjustable ? adjustable.currency : order.currency
     end
 
     def promotion?
@@ -86,6 +90,7 @@ module Spree
     # the specific object amount passed here.
     def update!(target = adjustable)
       return amount if closed? || source.blank?
+
       amount = source.compute_amount(target)
       attributes = { amount: amount, updated_at: Time.current }
       attributes[:eligible] = source.promotion.eligible?(target) if promotion?
@@ -99,6 +104,5 @@ module Spree
       # Cause adjustable's total to be recalculated
       Adjustable::AdjustmentsUpdater.update(adjustable)
     end
-
   end
 end

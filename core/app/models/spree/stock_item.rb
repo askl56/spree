@@ -75,6 +75,7 @@ module Spree
     # If stock was -20 but then was -25 (decrease of 5 units), do nothing.
     def process_backorders(number)
       return unless number.positive?
+
       units = backordered_inventory_units.first(number) # We can process atmost n backorders
 
       units.each do |unit|
@@ -96,7 +97,7 @@ module Spree
       # the variant_id changes from nil when a new stock location is added
       stock_changed = (saved_change_to_count_on_hand? &&
                         saved_change_to_count_on_hand.any?(&:zero?)) ||
-                      saved_change_to_variant_id?
+        saved_change_to_variant_id?
 
       variant.touch if !Spree::Config.binary_inventory_cache || stock_changed
     end

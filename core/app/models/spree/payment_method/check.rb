@@ -1,5 +1,5 @@
 module Spree
-  class PaymentMethod::Check < PaymentMethod
+  class PaymentMethod::Check < ::Spree::PaymentMethod
     def actions
       %w{capture void}
     end
@@ -37,7 +37,7 @@ module Spree
     private
 
     def simulated_successful_billing_response
-      ActiveMerchant::Billing::Response.new(true, "", {}, {})
+      ActiveMerchant::Billing::Response.new(true, '', {}, {})
     end
   end
 end

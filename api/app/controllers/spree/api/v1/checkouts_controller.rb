@@ -32,6 +32,8 @@ module Spree
               @order.associate_user!(Spree.user_class.find(user_id))
             end
 
+            log_state_changes if params[:state]
+
             return if after_update_attributes
 
             if @order.completed? || @order.next
@@ -69,7 +71,7 @@ module Spree
         end
 
         def raise_insufficient_quantity
-          respond_with(@order, default_template: 'spree/api/v1/orders/insufficient_quantity')
+          respond_with(@order, default_template: 'spree/api/v1/orders/insufficient_quantity', status: 422)
         end
 
         def state_callback(before_or_after = :before)
@@ -84,11 +86,21 @@ module Spree
 
             if handler.error.present?
               @coupon_message = handler.error
-              respond_with(@order, default_template: 'spree/api/v1/orders/could_not_apply_coupon')
+              respond_with(@order, default_template: 'spree/api/v1/orders/could_not_apply_coupon', status: 422)
               return true
             end
           end
           false
+        end
+
+        def log_state_changes
+          if @order.previous_changes[:state]
+            @order.log_state_changes(
+              state_name: 'order',
+              old_state: @order.previous_changes[:state].first,
+              new_state: @order.previous_changes[:state].last
+            )
+          end
         end
 
         def order_id

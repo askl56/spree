@@ -21,7 +21,7 @@
         position: absolute;
         top: 14px;
         left: 16px;
-        color: $gray;
+        color: $gray-500;
         cursor: move;
       }
       .btn-group {
@@ -41,7 +41,9 @@
         }
       }
       .image {
+	height: 191px;
         .thumbnail {
+	  max-height: 180px;
           margin-bottom: 8px;
           display: inline-block;
           width: 100%;
@@ -57,7 +59,7 @@
           font-weight: bold;
         }
         div.price {
-          color: $gray;
+          color: $gray-500;
         }
       }
       &:hover {

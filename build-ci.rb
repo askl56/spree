@@ -8,11 +8,7 @@ class Project
   NODE_TOTAL = Integer(ENV.fetch('CIRCLE_NODE_TOTAL', 1))
   NODE_INDEX = Integer(ENV.fetch('CIRCLE_NODE_INDEX', 0))
 
-  ROOT          = Pathname.pwd.freeze
-  VENDOR_BUNDLE = ROOT.join('vendor', 'bundle').freeze
-
-  BUNDLER_JOBS    = 4
-  BUNDLER_RETRIES = 3
+  ROOT       = Pathname.pwd.freeze
 
   DEFAULT_MODE = 'test'.freeze
 
@@ -31,7 +27,7 @@ class Project
   #   otherwise
   def install
     chdir do
-      bundle_check or bundle_install or fail 'Cannot finish gem installation'
+      bundle_check || bundle_install || raise('Cannot finish gem installation')
     end
     self
   end
@@ -47,13 +43,35 @@ class Project
     end
   end
 
+  # Process CLI arguments
+  #
+  # @param [Array<String>] arguments
+  #
+  # @return [Boolean]
+  #   the success of the CLI run
+  def self.run_cli(arguments)
+    raise ArgumentError if arguments.length > 1
+
+    mode = arguments.fetch(0, DEFAULT_MODE)
+
+    case mode
+    when 'install'
+      install
+      true
+    when 'test'
+      test
+    else
+      raise "Unknown mode: #{mode.inspect}"
+    end
+  end
+
   private
 
   # Check if current bundle is already usable
   #
   # @return [Boolean]
   def bundle_check
-    system(%W[bundle check --path=#{VENDOR_BUNDLE}])
+    system(%w[bundle check])
   end
 
   # Install the current bundle
@@ -61,20 +79,14 @@ class Project
   # @return [Boolean]
   #   the success of the installation
   def bundle_install
-    system(%W[
-      bundle
-      install
-      --path=#{VENDOR_BUNDLE}
-      --jobs=#{BUNDLER_JOBS}
-      --retry=#{BUNDLER_RETRIES}
-    ])
+    system(%w[bundle install])
   end
 
   # Setup the test app
   #
   # @return [undefined]
   def setup_test_app
-    system(%w[bundle exec rake test_app]) or fail 'Failed to setup the test app'
+    system(%w[bundle exec rake test_app]) || raise('Failed to setup the test app')
   end
 
   # Run tests for subproject
@@ -85,11 +97,11 @@ class Project
     system(%w[bundle exec rspec] + rspec_arguments)
   end
 
-  def rspec_arguments
+  def rspec_arguments(custom_name = name)
     args = []
-    args += %w[--order random]
+    args += %w[--order random --format documentation --profile 10]
     if report_dir = ENV['CIRCLE_TEST_REPORTS']
-      args += %W[-r rspec_junit_formatter --format RspecJunitFormatter -o #{report_dir}/rspec/#{name}.xml]
+      args += %W[-r rspec_junit_formatter --format RspecJunitFormatter -o #{report_dir}/rspec/#{custom_name}.xml]
     end
     args
   end
@@ -164,30 +176,9 @@ class Project
   #
   # @return [undefined]
   def self.log(message)
-    $stderr.puts(message)
+    warn(message)
   end
   private_class_method :log
-
-  # Process CLI arguments
-  #
-  # @param [Array<String>] arguments
-  #
-  # @return [Boolean]
-  #   the success of the CLI run
-  def self.run_cli(arguments)
-    fail ArgumentError if arguments.length > 1
-    mode = arguments.fetch(0, DEFAULT_MODE)
-
-    case mode
-    when 'install'
-      install
-      true
-    when 'test'
-      test
-    else
-      fail "Unknown mode: #{mode.inspect}"
-    end
-  end
-end # Project
+end
 
 exit Project.run_cli(ARGV)

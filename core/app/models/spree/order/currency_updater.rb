@@ -4,12 +4,10 @@ module Spree
       extend ActiveSupport::Concern
 
       included do
-
         def homogenize_line_item_currencies
           update_line_item_currencies!
           update_with_updater!
         end
-
       end
 
       # Updates prices of order's line items
@@ -29,12 +27,11 @@ module Spree
         price = price_from_line_item(line_item)
 
         if price
-          line_item.update_attributes!(currency: price.currency, price: price.amount)
+          line_item.update!(currency: price.currency, price: price.amount)
         else
-          raise RuntimeError, "no #{currency} price found for #{line_item.product.name} (#{line_item.variant.sku})"
+          raise "no #{currency} price found for #{line_item.product.name} (#{line_item.variant.sku})"
         end
       end
-
     end
   end
 end

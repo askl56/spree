@@ -3,10 +3,10 @@ module Spree
     before_validation :ensure_valid_quantity
 
     with_options inverse_of: :line_items do
-      belongs_to :order, class_name: "Spree::Order", touch: true
-      belongs_to :variant, class_name: "Spree::Variant"
+      belongs_to :order, class_name: 'Spree::Order', touch: true
+      belongs_to :variant, class_name: 'Spree::Variant'
     end
-    belongs_to :tax_category, class_name: "Spree::TaxCategory"
+    belongs_to :tax_category, class_name: 'Spree::TaxCategory'
 
     has_one :product, through: :variant
 
@@ -20,10 +20,10 @@ module Spree
     validates :quantity, numericality: { only_integer: true, message: Spree.t('validation.must_be_int') }
     validates :price, numericality: true
 
-    validates_with Stock::AvailabilityValidator
+    validates_with Spree::Stock::AvailabilityValidator
     validate :ensure_proper_currency, if: -> { order.present? }
 
-    before_destroy :verify_order_inventory, if: -> { order.has_checkout_step?("delivery") }
+    before_destroy :verify_order_inventory_before_destroy, if: -> { order.has_checkout_step?('delivery') }
 
     before_destroy :destroy_inventory_units
 
@@ -32,7 +32,7 @@ module Spree
 
     after_create :update_tax_charge
 
-    delegate :name, :description, :sku, :should_track_inventory?, :product, :options_text, to: :variant
+    delegate :name, :description, :sku, :should_track_inventory?, :product, :options_text, :slug, to: :variant
     delegate :brand, :category, to: :product
     delegate :tax_zone, to: :order
 
@@ -54,13 +54,12 @@ module Spree
     end
 
     def copy_tax_category
-      if variant
-        self.tax_category = variant.tax_category
-      end
+      self.tax_category = variant.tax_category if variant
     end
 
     extend DisplayMoney
-    money_methods :amount, :subtotal, :discounted_amount, :final_amount, :total, :price
+    money_methods :amount, :subtotal, :discounted_amount, :final_amount, :total, :price,
+                  :adjustment_total, :additional_tax_total, :promo_total, :included_tax_total
 
     alias single_money display_price
     alias single_display_amount display_price
@@ -76,7 +75,7 @@ module Spree
     end
 
     alias discounted_money display_discounted_amount
-    alias_method :discounted_amount, :taxable_amount
+    alias discounted_amount taxable_amount
 
     def final_amount
       amount + adjustment_total
@@ -86,7 +85,7 @@ module Spree
     alias money display_total
 
     def sufficient_stock?
-      Stock::Quantifier.new(variant).can_supply? quantity
+      Spree::Stock::Quantifier.new(variant).can_supply? quantity
     end
 
     def insufficient_stock?
@@ -118,7 +117,9 @@ module Spree
     def update_price_from_modifier(currency, opts)
       if currency
         self.currency = currency
-        self.price = variant.price_in(currency).amount +
+        # variant.price_in(currency).amount can be nil if
+        # there's no price for this currency
+        self.price = (variant.price_in(currency).amount || 0) +
           variant.price_modifier_amount_in(currency, opts)
       else
         self.price = variant.price +
@@ -127,12 +128,16 @@ module Spree
     end
 
     def update_inventory
-      if (saved_changes? || target_shipment.present?) && order.has_checkout_step?("delivery")
+      if (saved_changes? || target_shipment.present?) && order.has_checkout_step?('delivery')
         verify_order_inventory
       end
     end
 
     def verify_order_inventory
+      Spree::OrderInventory.new(order, self).verify(target_shipment, is_updated: true)
+    end
+
+    def verify_order_inventory_before_destroy
       Spree::OrderInventory.new(order, self).verify(target_shipment)
     end
 
@@ -148,7 +153,7 @@ module Spree
     end
 
     def recalculate_adjustments
-      Adjustable::AdjustmentsUpdater.update(self)
+      Spree::Adjustable::AdjustmentsUpdater.update(self)
     end
 
     def update_tax_charge

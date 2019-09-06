@@ -3,9 +3,8 @@
 # the one component of Spree.
 source 'https://rubygems.org'
 
-gem 'coffee-rails'
 gem 'sass-rails'
-gem 'sqlite3', platforms: [:ruby, :mingw, :mswin, :x64_mingw]
+gem 'sqlite3', '~> 1.4.0', platforms: [:ruby, :mingw, :mswin, :x64_mingw]
 gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw]
 
 platforms :jruby do
@@ -15,32 +14,29 @@ end
 
 platforms :ruby do
   gem 'mysql2'
-  gem 'pg'
+  gem 'pg', '~> 0.18'
 end
 
 group :test do
-  gem 'capybara', '~> 2.4'
+  gem 'capybara', '~> 3.24'
   gem 'capybara-screenshot', '~> 1.0'
   gem 'database_cleaner', '~> 1.3'
   gem 'email_spec'
-  gem 'factory_girl_rails', '~> 4.7'
-  gem 'launchy'
+  gem 'factory_bot_rails', '~> 5.0'
   gem 'rspec-activemodel-mocks', '~> 1.0'
-  gem 'rspec-collection_matchers'
-  gem 'rspec-its'
-  gem 'rspec-rails', '~> 3.6'
+  gem 'rspec-rails', '~> 4.0.0.beta2'
+  gem 'rspec-retry'
   gem 'rspec_junit_formatter'
+  gem 'jsonapi-rspec'
   gem 'simplecov'
   gem 'webmock', '~> 3.0.1'
-  gem 'poltergeist', '~> 1.10'
   gem 'timecop'
-  gem 'with_model'
-  gem 'shoulda-matchers', '~> 3.1'
-  gem 'shoulda-callback-matchers', '~> 1.1'
   gem 'rails-controller-testing'
 end
 
 group :test, :development do
-  gem 'rubocop', require: false
+  gem 'rubocop', '~> 0.60.0', require: false
+  gem 'rubocop-rspec', require: false
   gem 'pry-byebug'
+  gem 'webdrivers', '~> 4.0.0'
 end

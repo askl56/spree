@@ -10,8 +10,14 @@ module Spree
       'TO', 'TV', 'UG', 'AE', 'VU', 'YE', 'ZW'
     ].freeze
 
-    belongs_to :country, class_name: "Spree::Country"
-    belongs_to :state, class_name: "Spree::State", optional: true
+    # we're not freezing this on purpose so developers can extend and manage
+    # those attributes depending of the logic of their applications
+    ADDRESS_FIELDS = %w(firstname lastname company address1 address2 city state zipcode country phone)
+    EXCLUDED_KEYS_FOR_COMPARISION = %w(id updated_at created_at deleted_at user_id)
+
+    belongs_to :country, class_name: 'Spree::Country'
+    belongs_to :state, class_name: 'Spree::State', optional: true
+    belongs_to :user, class_name: Spree.user_class.name, optional: true
 
     has_many :shipments, inverse_of: :address
 
@@ -25,17 +31,19 @@ module Spree
 
     validate :state_validate, :postal_code_validate
 
+    delegate :name, :iso3, :iso, :iso_name, to: :country, prefix: true
+    delegate :abbr, to: :state, prefix: true, allow_nil: true
+
     alias_attribute :first_name, :firstname
     alias_attribute :last_name, :lastname
 
     self.whitelisted_ransackable_attributes = %w[firstname lastname company]
 
     def self.build_default
-      country = Spree::Country.find(Spree::Config[:default_country_id]) rescue Spree::Country.first
-      new(country: country)
+      new(country: Spree::Country.default)
     end
 
-    def self.default(user = nil, kind = "bill")
+    def self.default(user = nil, kind = 'bill')
       if user && user_address = user.public_send(:"#{kind}_address")
         user_address.clone
       else
@@ -43,10 +51,11 @@ module Spree
       end
     end
 
-    # Can modify an address if it's not been used in an order (but checkouts controller has finer control)
-    # def editable?
-    #   new_record? || (shipments.empty? && checkouts.empty?)
-    # end
+    def self.required_fields
+      Spree::Address.validators.map do |v|
+        v.is_a?(ActiveModel::Validations::PresenceValidator) ? v.attributes : []
+      end.flatten
+    end
 
     def full_name
       "#{firstname} #{lastname}".strip
@@ -56,28 +65,33 @@ module Spree
       state.try(:abbr) || state.try(:name) || state_name
     end
 
-    def same_as?(other)
-      return false if other.nil?
-      attributes.except('id', 'updated_at', 'created_at') == other.attributes.except('id', 'updated_at', 'created_at')
+    def state_name_text
+      state_name.present? ? state_name : state&.name
     end
 
-    alias same_as same_as?
-
     def to_s
-      "#{full_name}: #{address1}"
+      [
+        full_name,
+        company,
+        address1,
+        address2,
+        "#{city}, #{state_text} #{zipcode}",
+        country.to_s
+      ].reject(&:blank?).map { |attribute| ERB::Util.html_escape(attribute) }.join('<br/>')
     end
 
     def clone
-      self.class.new(self.attributes.except('id', 'updated_at', 'created_at'))
+      self.class.new(value_attributes)
     end
 
-    def ==(other_address)
-      self_attrs = self.attributes
-      other_attrs = other_address.respond_to?(:attributes) ? other_address.attributes : {}
+    def ==(other)
+      return false unless other&.respond_to?(:value_attributes)
 
-      [self_attrs, other_attrs].each { |attrs| attrs.except!('id', 'created_at', 'updated_at') }
+      value_attributes == other.value_attributes
+    end
 
-      self_attrs == other_attrs
+    def value_attributes
+      attributes.except(*EXCLUDED_KEYS_FOR_COMPARISION)
     end
 
     def empty?
@@ -99,19 +113,36 @@ module Spree
     end
 
     def require_phone?
-      true
+      Spree::Config[:address_requires_phone]
     end
 
     def require_zipcode?
       country ? country.zipcode_required? : true
     end
 
-    private
-
-    def clear_state_entities
-      clear_state
-      clear_state_name
+    def editable?
+      new_record? || (shipments.empty? && !Order.complete.where('bill_address_id = ? OR ship_address_id = ?', id, id).exists?)
     end
+
+    def can_be_deleted?
+      shipments.empty? && !Order.where('bill_address_id = ? OR ship_address_id = ?', id, id).exists?
+    end
+
+    def check
+      attrs = attributes.except('id', 'updated_at', 'created_at')
+      the_same_address = user&.addresses&.find_by(attrs)
+      the_same_address || self
+    end
+
+    def destroy
+      if can_be_deleted?
+        super
+      else
+        update_column :deleted_at, Time.current
+      end
+    end
+
+    private
 
     def clear_state
       self.state = nil
@@ -134,6 +165,7 @@ module Spree
       # or when disabled by preference
       return if country.blank? || !Spree::Config[:address_requires_state]
       return unless country.states_required
+
       # ensure associated state belongs to country
       if state.present?
         if state.country == country
@@ -165,10 +197,10 @@ module Spree
 
     def postal_code_validate
       return if country.blank? || country.iso.blank? || !require_zipcode?
-      return if !TwitterCldr::Shared::PostalCodes.territories.include?(country.iso.downcase.to_sym)
+      return unless TwitterCldr::Shared::PostalCodes.territories.include?(country.iso.downcase.to_sym)
 
       postal_code = TwitterCldr::Shared::PostalCodes.for_territory(country.iso)
-      errors.add(:zipcode, :invalid) if !postal_code.valid?(zipcode.to_s.strip)
+      errors.add(:zipcode, :invalid) unless postal_code.valid?(zipcode.to_s.strip)
     end
   end
 end
